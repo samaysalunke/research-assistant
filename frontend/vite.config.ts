@@ -4,8 +4,8 @@ import path from 'path'
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
-  // Load env file based on `mode` in the current working directory.
-  const env = loadEnv(mode, process.cwd(), '')
+  // Load env file from the root directory (parent of frontend)
+  const env = loadEnv(mode, path.resolve(__dirname, '..'), '')
   
   return {
   plugins: [react()],
