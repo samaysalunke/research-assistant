@@ -7,13 +7,13 @@ from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import os
-from dotenv import load_dotenv
 
 # Import routers
 from api.v1 import ingest, search, documents
+from core.config import get_settings
 
-# Load environment variables
-load_dotenv()
+# Get settings
+settings = get_settings()
 
 # Create FastAPI app
 app = FastAPI(
@@ -27,7 +27,7 @@ app = FastAPI(
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:5173").split(","),
+    allow_origins=settings.cors_origins.split(","),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -72,8 +72,8 @@ if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
         "main:app",
-        host=os.getenv("API_HOST", "0.0.0.0"),
-        port=int(os.getenv("API_PORT", "8000")),
-        reload=os.getenv("RELOAD", "true").lower() == "true",
-        workers=int(os.getenv("WORKERS", "1"))
+        host=settings.api_host,
+        port=settings.api_port,
+        reload=settings.debug,
+        workers=settings.workers
     )

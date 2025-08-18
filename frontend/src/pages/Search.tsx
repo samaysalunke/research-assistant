@@ -29,7 +29,7 @@ const Search: React.FC = () => {
 
     setLoading(true);
     try {
-      const response = await fetch('${import.meta.env.VITE_API_URL}/api/v1/search/', {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/search/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
