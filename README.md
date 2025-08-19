@@ -1,81 +1,77 @@
 # Research-to-Insights Agent
 
-A comprehensive AI-powered system that transforms digital content into structured, queryable knowledge using advanced natural language processing and semantic search.
+A powerful AI-driven research assistant that transforms digital content into structured, queryable knowledge with conversational search capabilities.
 
-## 🚀 Overview
+## 🚀 Key Features
 
-The Research-to-Insights Agent automatically ingests, processes, and analyzes digital content (articles, documentation, research papers) to extract actionable insights, generate summaries, and enable intelligent search across your knowledge base.
+### 📚 **Multi-Format Content Ingestion**
+- **URL Processing**: Extract and analyze web content from any URL
+- **PDF Upload**: Upload and process PDF documents with text extraction
+- **Direct Text Input**: Process raw text content directly
+- **Batch Processing**: Handle multiple documents simultaneously
 
-## ✨ Key Features
+### 🤖 **AI-Powered Content Analysis**
+- **Intelligent Summarization**: Generate comprehensive summaries using Claude 3.5 Sonnet
+- **Insight Extraction**: Identify key insights and actionable items
+- **Tag Generation**: Automatic topic tagging and categorization
+- **Content Quality Assessment**: Evaluate document quality and complexity
+- **Quotable Snippets**: Extract memorable quotes and key passages
 
-### 🔍 **Advanced Content Processing**
-- **Multi-Method Content Extraction**: Web scraping, PDF processing, direct text input
-- **AI-Powered Analysis**: Content-aware processing strategies using Claude 3.5 Sonnet
-- **Enhanced Text Processing**: Language detection, content classification, quality assessment
-- **Intelligent Chunking**: Semantic sentence-based chunking with overlap
+### 🔍 **Advanced Search & Retrieval**
+- **Conversational Search**: Ask questions in natural language and get AI-generated responses
+- **Multi-Modal Search**: Semantic, keyword, hybrid, tag, and content-type search
+- **Smart Filtering**: Filter by content type, quality, language, tags, and date ranges
+- **Relevance Scoring**: Intelligent ranking based on multiple factors
+- **Context-Aware Responses**: AI synthesizes information from multiple documents
 
-### 🎯 **Multi-Modal Search & Retrieval**
-- **7 Search Types**: Semantic, keyword, hybrid, tag, content_type, quality, date_range
-- **Advanced Filtering**: Content type, quality, language, word count, reading time, complexity
-- **Smart Sorting**: Relevance, date, quality, reading time, complexity, word count
-- **Natural Language Queries**: Date ranges, content type detection
-
-### 📊 **Rich Content Analysis**
-- **Automatic Tagging**: AI-generated tags and key phrases
-- **Insight Extraction**: Actionable insights and quotable snippets
-- **Quality Assessment**: Multi-factor content quality scoring
-- **Reading Time Estimation**: Accurate reading time calculation
-
-### 🔄 **Robust Processing Pipeline**
-- **Background Processing**: Asynchronous content processing with progress tracking
-- **Error Handling**: Comprehensive retry mechanisms and error recovery
-- **Performance Monitoring**: Real-time metrics and processing analytics
-- **Task Management**: Cancel, monitor, and manage processing tasks
+### 📊 **Enhanced Metadata**
+- **Content Classification**: Automatic categorization of document types
+- **Reading Time Estimation**: Calculate time to read documents
+- **Complexity Analysis**: Assess document difficulty and complexity
+- **Language Detection**: Identify document language automatically
+- **Structure Analysis**: Analyze document organization and formatting
 
 ## 🏗️ Architecture
 
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Frontend      │    │   Backend       │    │   Database      │
-│   (React/TS)    │◄──►│   (FastAPI)     │◄──►│   (Supabase)    │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-                              │
-                              ▼
-                       ┌─────────────────┐
-                       │   AI Services   │
-                       │  (Claude/OpenAI)│
-                       └─────────────────┘
-```
+### **Backend (FastAPI + Python)**
+- **FastAPI**: High-performance async web framework
+- **Supabase**: PostgreSQL database with real-time capabilities
+- **Anthropic Claude**: Advanced AI processing and conversational responses
+- **OpenAI Embeddings**: Vector embeddings for semantic search
+- **PyPDF2**: PDF text extraction and processing
+
+### **Frontend (React + TypeScript)**
+- **React 18**: Modern UI framework with hooks
+- **TypeScript**: Type-safe development
+- **Tailwind CSS**: Utility-first styling
+- **shadcn/ui**: Beautiful, accessible components
+- **Vite**: Fast development and build tool
+
+### **Database (PostgreSQL + pgvector)**
+- **PostgreSQL**: Robust relational database
+- **pgvector**: Vector similarity search
+- **Row Level Security**: Multi-tenant data isolation
+- **Real-time Subscriptions**: Live updates and notifications
 
 ## 🛠️ Technology Stack
 
-### **Frontend**
-- **React 18** with TypeScript
-- **Tailwind CSS** + shadcn/ui components
-- **Vite** for build tooling
-- **React Router** for navigation
+### **Core Technologies**
+- **Backend**: FastAPI, Python 3.13, Pydantic
+- **Database**: PostgreSQL, Supabase, pgvector
+- **AI/ML**: Anthropic Claude 3.5 Sonnet, OpenAI Embeddings
+- **Frontend**: React 18, TypeScript, Tailwind CSS
+- **Build Tools**: Vite, npm, Python venv
 
-### **Backend**
-- **FastAPI** (Python) for API server
-- **Anthropic Claude 3.5 Sonnet** for content analysis
-- **OpenAI text-embedding-3-small** for embeddings
-- **Playwright** + **newspaper3k** for web scraping
+### **Key Libraries**
+- **PDF Processing**: PyPDF2, python-multipart
+- **Web Scraping**: BeautifulSoup4, Playwright, newspaper3k
+- **Text Processing**: NLTK, langdetect
+- **Authentication**: JWT, Supabase Auth
+- **HTTP Client**: httpx, requests
 
-### **Database**
-- **Supabase** (PostgreSQL) for data storage
-- **pgvector** for vector similarity search
-- **Row Level Security (RLS)** for multi-tenancy
+## 📖 Usage
 
-## 📦 Installation
-
-### Prerequisites
-- Python 3.11+
-- Node.js 18+
-- Supabase account
-- Anthropic API key
-- OpenAI API key
-
-### Quick Start
+### **Getting Started**
 
 1. **Clone the repository**
    ```bash
@@ -86,80 +82,50 @@ The Research-to-Insights Agent automatically ingests, processes, and analyzes di
 2. **Set up environment variables**
    ```bash
    cp .env.example .env
-   # Edit .env with your API keys and Supabase credentials
+   # Edit .env with your API keys
    ```
 
 3. **Install dependencies**
    ```bash
-   # Backend dependencies
+   # Backend
    cd backend
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
    pip install -r requirements.txt
    
-   # Frontend dependencies
+   # Frontend
    cd ../frontend
    npm install
    ```
 
-4. **Set up database**
+4. **Start the application**
    ```bash
-   # Apply database migrations
-   cd ../backend
-   python -m database.migrations
-   ```
-
-5. **Start the application**
-   ```bash
-   # Start backend (from backend directory)
+   # Backend (from backend directory)
    uvicorn main:app --reload --port 8000
    
-   # Start frontend (from frontend directory)
+   # Frontend (from frontend directory)
    npm run dev
    ```
 
-## 🚀 Usage
+### **Using the Application**
 
-### **Content Ingestion**
+#### **Content Ingestion**
+1. **Upload PDFs**: Drag and drop PDF files or use the file picker
+2. **Add URLs**: Enter web URLs to extract and analyze content
+3. **Direct Text**: Paste text content directly for processing
+4. **Monitor Progress**: Track processing status in real-time
 
-1. **URL Processing**: Submit any web URL for automatic content extraction and analysis
-2. **Text Input**: Directly paste text content for processing
-3. **Batch Processing**: Process multiple URLs simultaneously
+#### **Conversational Search**
+1. **Ask Questions**: Use natural language queries like "What is the connection between reading and writing?"
+2. **Get AI Responses**: Receive comprehensive, synthesized answers
+3. **Explore Sources**: View the documents that informed the response
+4. **Follow-up Suggestions**: Get intelligent suggestions for related questions
 
-### **Search & Discovery**
-
-1. **Natural Language Search**: Ask questions in plain English
-2. **Advanced Filtering**: Filter by content type, quality, language, date range
-3. **Smart Sorting**: Sort results by relevance, date, quality, or other criteria
-4. **Tag-Based Search**: Search using hashtags or extracted tags
-
-### **Content Analysis**
-
-- **Automatic Summaries**: AI-generated content summaries
-- **Key Insights**: Extracted actionable insights and takeaways
-- **Action Items**: Identified next steps and tasks
-- **Quotable Snippets**: Notable quotes and statements
-
-## 📚 API Documentation
-
-### **Content Ingestion**
-```http
-POST /api/v1/ingest/
-{
-  "source_url": "https://example.com/article",
-  "text_content": "Optional direct text input"
-}
-```
-
-### **Search**
-```http
-GET /api/v1/search/?q=artificial intelligence&search_type=hybrid&content_type=technical
-```
-
-### **Document Management**
-```http
-GET /api/v1/documents/          # List all documents
-GET /api/v1/documents/{id}      # Get specific document
-DELETE /api/v1/documents/{id}   # Delete document
-```
+#### **Advanced Search**
+1. **Multiple Search Types**: Choose from semantic, keyword, hybrid, tag, or content-type search
+2. **Smart Filtering**: Filter results by quality, language, tags, or date ranges
+3. **Sorting Options**: Sort by relevance, date, quality, or reading time
+4. **Export Results**: Save and share search results
 
 ## 🔧 Configuration
 
@@ -167,122 +133,128 @@ DELETE /api/v1/documents/{id}   # Delete document
 ```bash
 # Supabase Configuration
 SUPABASE_URL=your_supabase_url
-SUPABASE_ANON_KEY=your_anon_key
-SUPABASE_SERVICE_KEY=your_service_key
+SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_KEY=your_supabase_service_key
 
 # AI Services
-ANTHROPIC_API_KEY=your_claude_key
-OPENAI_API_KEY=your_openai_key
+ANTHROPIC_API_KEY=your_anthropic_api_key
+OPENAI_API_KEY=your_openai_api_key
 
 # Application Settings
-CHUNK_SIZE=1000
-CHUNK_OVERLAP=200
-VECTOR_DIMENSION=1536
+ENVIRONMENT=development
+DEBUG=true
+CORS_ORIGINS=http://localhost:5173
 ```
 
-### **Processing Settings**
-- **Chunk Size**: Default 1000 characters per chunk
-- **Chunk Overlap**: Default 200 characters overlap
-- **Vector Dimension**: 1536 for OpenAI embeddings
-- **Similarity Threshold**: 0.7 for semantic search
+### **Database Setup**
+1. Create a Supabase project
+2. Enable the `pgvector` extension
+3. Run the provided migration scripts
+4. Configure Row Level Security policies
 
 ## 📊 Performance
 
 ### **Processing Capabilities**
-- **Content Extraction**: 95%+ success rate across major websites
-- **AI Processing**: 2-5 seconds per document (depending on length)
-- **Search Performance**: Sub-second response times
-- **Concurrent Processing**: Support for multiple simultaneous tasks
+- **PDF Processing**: Up to 50MB files, multi-page support
+- **Web Scraping**: Intelligent content extraction with fallback mechanisms
+- **AI Processing**: Parallel processing with background tasks
+- **Search Performance**: Sub-second response times with vector indexing
 
 ### **Scalability**
-- **Database**: Optimized for 100K+ documents
-- **Vector Search**: Efficient similarity search with pgvector
-- **Background Processing**: Asynchronous task management
-- **Caching**: Intelligent result caching for repeated queries
+- **Horizontal Scaling**: Stateless backend design
+- **Database Optimization**: Efficient indexing and query optimization
+- **Caching**: Intelligent caching for frequently accessed content
+- **Background Processing**: Non-blocking content processing
 
 ## 🔒 Security
 
-### **Authentication**
-- **Supabase Auth**: JWT-based authentication
-- **Row Level Security**: User-specific data isolation
-- **API Security**: Rate limiting and input validation
+### **Data Protection**
+- **Row Level Security**: User data isolation
+- **JWT Authentication**: Secure token-based authentication
+- **Input Validation**: Comprehensive input sanitization
+- **File Upload Security**: Secure PDF processing with validation
 
-### **Data Privacy**
-- **User Isolation**: Complete data separation between users
-- **Secure Storage**: Encrypted data storage in Supabase
-- **API Keys**: Secure environment variable management
+### **Privacy**
+- **Local Processing**: Content processed on your infrastructure
+- **No Data Sharing**: Your data stays private
+- **Configurable Retention**: Control data retention policies
 
 ## 🧪 Testing
 
-### **Run Test Suite**
+### **API Testing**
 ```bash
-# Backend tests
-cd backend
-python -m pytest
+# Test the API endpoints
+curl http://localhost:8000/health
+curl http://localhost:8000/api/v1/search/conversational?q=test
+```
 
-# Frontend tests
+### **Frontend Testing**
+```bash
 cd frontend
-npm test
+npm run test
+npm run build
 ```
 
-### **Manual Testing**
-```bash
-# Test content ingestion
-curl -X POST "http://localhost:8000/api/v1/ingest/" \
-  -H "Content-Type: application/json" \
-  -d '{"source_url": "https://example.com/article"}'
+## 📚 Documentation
 
-# Test search
-curl "http://localhost:8000/api/v1/search/?q=artificial intelligence"
-```
+- **[User Guide](docs/USER_GUIDE.md)**: Complete user documentation
+- **[Developer Guide](docs/DEVELOPER_GUIDE.md)**: Development setup and guidelines
+- **[API Reference](docs/API_REFERENCE.md)**: Complete API documentation
+- **[Deployment Guide](docs/DEPLOYMENT_GUIDE.md)**: Production deployment instructions
 
 ## 🚀 Deployment
 
-### **Production Setup**
-1. **Environment**: Set production environment variables
-2. **Database**: Apply all migrations to production database
-3. **Build**: Build frontend for production
-4. **Deploy**: Deploy to your preferred hosting platform
+### **Quick Deploy Options**
+- **Railway**: One-click deployment with automatic scaling
+- **Render**: Free tier available with easy setup
+- **Vercel**: Frontend deployment with serverless functions
 
-### **Recommended Platforms**
-- **Backend**: Railway, Render, or AWS
-- **Frontend**: Vercel, Netlify, or GitHub Pages
-- **Database**: Supabase (managed PostgreSQL)
+### **Production Setup**
+- **Docker**: Containerized deployment
+- **Cloud Platforms**: AWS, GCP, Azure support
+- **Monitoring**: Built-in health checks and logging
+- **SSL/TLS**: Automatic HTTPS configuration
 
 ## 🤝 Contributing
 
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Add tests for new functionality
+4. Add tests
 5. Submit a pull request
+
+### **Development Guidelines**
+- Follow TypeScript best practices
+- Use conventional commits
+- Add comprehensive tests
+- Update documentation
 
 ## 📄 License
 
-MIT License - see [LICENSE](LICENSE) file for details
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## 🆘 Support
 
-- **Issues**: Report bugs via GitHub Issues
-- **Documentation**: Check the `/docs` folder for detailed guides
-- **Community**: Join our Discord for discussions
+- **Issues**: Report bugs and feature requests on GitHub
+- **Discussions**: Join community discussions
+- **Documentation**: Comprehensive guides and tutorials
+- **Examples**: Sample queries and use cases
 
 ## 🗺️ Roadmap
 
 ### **Upcoming Features**
-- [ ] **Multi-language Support**: Process content in multiple languages
-- [ ] **PDF Processing**: Direct PDF file upload and processing
-- [ ] **Collaborative Features**: Share insights and collaborate with teams
-- [ ] **Advanced Analytics**: Usage analytics and content insights
-- [ ] **API Integrations**: Connect with external knowledge sources
-- [ ] **Mobile App**: Native mobile application
+- **Video Processing**: YouTube and video content analysis
+- **Multi-language Support**: Internationalization and translation
+- **Collaborative Features**: Team workspaces and sharing
+- **Advanced Analytics**: Usage insights and content metrics
+- **Mobile App**: Native iOS and Android applications
 
-### **Performance Improvements**
-- [ ] **Caching Layer**: Redis-based caching for faster responses
-- [ ] **CDN Integration**: Global content delivery network
-- [ ] **Database Optimization**: Advanced indexing and query optimization
-- [ ] **Background Jobs**: Queue-based processing for high-volume usage
+### **Enhancements**
+- **Voice Search**: Speech-to-text search capabilities
+- **Export Options**: Multiple format export (PDF, Word, Markdown)
+- **Integration APIs**: Third-party service integrations
+- **Advanced AI Models**: Support for additional AI providers
 
 ---
 
-**Built with ❤️ using modern AI and web technologies**
+**Built with ❤️ using modern web technologies and AI**

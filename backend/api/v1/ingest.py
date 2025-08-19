@@ -1,9 +1,9 @@
 """
 Content ingestion API endpoints
-Handles URL and text content submission for processing
+Handles URL, text, and PDF content submission for processing
 """
 
-from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, UploadFile, File
 from typing import Optional
 import uuid
 from datetime import datetime
@@ -13,6 +13,7 @@ from auth.middleware import get_current_user
 from models.schemas import DocumentCreate, ProcessingStatus
 from services.content_processor import ContentProcessor
 from services.processing_pipeline import EnhancedProcessingPipeline
+from services.pdf_processor import PDFProcessor
 from database.client import get_supabase_user_client
 
 router = APIRouter(prefix="/ingest", tags=["Content Ingestion"])
@@ -139,6 +140,73 @@ async def ingest_content(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to start processing: {str(e)}")
 
+@router.post("/pdf", response_model=ProcessingStatus)
+async def ingest_pdf(
+    file: UploadFile = File(...),
+    background_tasks: BackgroundTasks = None,
+    current_user = Depends(get_current_user),
+    settings = Depends(get_settings)
+):
+    """
+    Ingest content from PDF file upload
+    """
+    try:
+        # Validate file
+        if not file.filename or not file.filename.lower().endswith('.pdf'):
+            raise HTTPException(status_code=400, detail="File must be a PDF")
+        
+        # Read file content
+        file_content = await file.read()
+        
+        # Validate PDF
+        pdf_processor = PDFProcessor()
+        validation = pdf_processor.validate_pdf(file_content, file.filename)
+        
+        if not validation['valid']:
+            raise HTTPException(status_code=400, detail=validation['error'])
+        
+        # Use service client for database operations
+        from database.client import get_supabase_service_client
+        supabase = get_supabase_service_client()
+        
+        # Generate job ID
+        job_id = str(uuid.uuid4())
+        
+        # Create initial document record
+        document_data = {
+            "id": job_id,
+            "user_id": current_user.get('id'),
+            "source_url": None,  # PDFs don't have URLs
+            "title": f"Processing PDF: {file.filename}",
+            "processing_status": "pending",
+            "created_at": datetime.utcnow().isoformat(),
+            "updated_at": datetime.utcnow().isoformat()
+        }
+        
+        # Insert document record
+        try:
+            result = supabase.table("documents").insert(document_data).execute()
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to create document record: {str(e)}")
+        
+        # Process PDF in background
+        background_tasks.add_task(
+            process_pdf_background,
+            job_id=job_id,
+            file_content=file_content,
+            filename=file.filename,
+            user_id=current_user.get('id')
+        )
+        
+        return ProcessingStatus(
+            job_id=job_id,
+            status="pending",
+            message=f"PDF processing started: {file.filename}"
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to start PDF processing: {str(e)}")
+
 @router.get("/{job_id}/status", response_model=ProcessingStatus)
 async def get_processing_status(
     job_id: str,
@@ -232,3 +300,54 @@ async def process_content_background(job_id: str, content: DocumentCreate, user_
         }).eq("id", job_id).execute()
         
         print(f"Processing failed for job {job_id}: {str(e)}")
+
+async def process_pdf_background(job_id: str, file_content: bytes, filename: str, user_id: str):
+    """
+    Background task to process PDF content
+    """
+    try:
+        # Update status to processing
+        from database.client import get_supabase_service_client
+        supabase = get_supabase_service_client()
+        supabase.table("documents").update({"processing_status": "processing"}).eq("id", job_id).execute()
+        
+        # Process PDF
+        pdf_processor = PDFProcessor()
+        pdf_result = await pdf_processor.process_pdf(file_content, filename)
+        
+        if not pdf_result['success']:
+            raise Exception(pdf_result['error'])
+        
+        # Process extracted text through content processor
+        processor = ContentProcessor()
+        processed_content = await processor.process_text(pdf_result['text'])
+        
+        # Update document with processed content
+        update_data = {
+            "title": processed_content["title"] or f"PDF: {filename}",
+            "summary": processed_content["summary"],
+            "tags": processed_content["tags"],
+            "insights": processed_content["insights"],
+            "action_items": processed_content["action_items"],
+            "quotable_snippets": processed_content["quotable_snippets"],
+            "content_chunks": processed_content["chunks"],
+            "processing_status": "completed",
+            "updated_at": datetime.utcnow().isoformat(),
+            # Add PDF metadata
+            "source_url": f"pdf://{filename}",
+            "content_type": "pdf"
+        }
+        
+        supabase.table("documents").update(update_data).eq("id", job_id).execute()
+        
+        # Generate embeddings for chunks
+        await processor.generate_embeddings(job_id, processed_content["chunks"])
+        
+    except Exception as e:
+        # Update status to failed
+        supabase.table("documents").update({
+            "processing_status": "failed",
+            "updated_at": datetime.utcnow().isoformat()
+        }).eq("id", job_id).execute()
+        
+        print(f"PDF processing failed for job {job_id}: {str(e)}")

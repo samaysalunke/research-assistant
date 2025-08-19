@@ -11,6 +11,7 @@ from core.config import get_settings
 from auth.middleware import get_current_user
 from models.schemas import SearchRequest, SearchResponse, SearchResult
 from database.client import get_supabase_service_client
+from services.conversational_search import ConversationalSearchService
 
 router = APIRouter(prefix="/search", tags=["Search"])
 
@@ -175,3 +176,153 @@ async def search_content_get(
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
+
+@router.post("/conversational")
+async def conversational_search(
+    search_request: SearchRequest,
+    current_user: dict = Depends(get_current_user),
+    settings = Depends(get_settings)
+):
+    """
+    Conversational search that provides AI-generated responses based on search results
+    """
+    try:
+        # First, perform regular search
+        supabase = get_supabase_service_client()
+        result = supabase.table("documents").select("*").execute()
+        
+        if not result.data:
+            return {
+                'response': f"I couldn't find any documents in your library to search through. Try adding some content first.",
+                'sources': [],
+                'confidence': 0.0,
+                'suggestions': ["Add some documents to your library", "Try uploading a PDF or adding a URL"],
+                'result_count': 0,
+                'query': search_request.query
+            }
+        
+        # Perform keyword matching
+        query_terms = search_request.query.lower().split()
+        matches = []
+        
+        for doc in result.data:
+            score = 0
+            title = doc.get('title', '').lower()
+            summary = doc.get('summary', '').lower()
+            tags = [tag.lower() for tag in doc.get('tags', [])]
+            
+            # Calculate relevance score
+            for term in query_terms:
+                if term in title:
+                    score += 3
+                if term in summary:
+                    score += 2
+                if any(term in tag for tag in tags):
+                    score += 1
+            
+            if score > 0:
+                matches.append({
+                    'doc': doc,
+                    'score': score
+                })
+        
+        # Sort by score and limit results
+        matches.sort(key=lambda x: x['score'], reverse=True)
+        matches = matches[:search_request.limit]
+        
+        # Convert to format expected by conversational service
+        search_results = []
+        for match in matches:
+            doc = match['doc']
+            search_results.append({
+                'document_title': doc.get('title', ''),
+                'document_url': doc.get('source_url', ''),
+                'content': doc.get('summary', '')[:500],
+                'similarity': match['score'] / 10.0
+            })
+        
+        # Generate conversational response
+        conversational_service = ConversationalSearchService()
+        response = await conversational_service.get_conversational_response(
+            search_request.query, 
+            search_results
+        )
+        
+        return response
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Conversational search failed: {str(e)}")
+
+@router.get("/conversational")
+async def conversational_search_get(
+    q: str = Query(..., description="Search query"),
+    limit: int = Query(5, description="Maximum number of results to consider"),
+    current_user: dict = Depends(get_current_user),
+    settings = Depends(get_settings)
+):
+    """
+    Conversational search using GET method
+    """
+    try:
+        # First, perform regular search
+        supabase = get_supabase_service_client()
+        result = supabase.table("documents").select("*").execute()
+        
+        if not result.data:
+            return {
+                'response': f"I couldn't find any documents in your library to search through. Try adding some content first.",
+                'sources': [],
+                'confidence': 0.0,
+                'suggestions': ["Add some documents to your library", "Try uploading a PDF or adding a URL"],
+                'result_count': 0,
+                'query': q
+            }
+        
+        # Perform keyword matching
+        query_terms = q.lower().split()
+        matches = []
+        
+        for doc in result.data:
+            score = 0
+            title = doc.get('title', '').lower()
+            summary = doc.get('summary', '').lower()
+            tags = [tag.lower() for tag in doc.get('tags', [])]
+            
+            # Calculate relevance score
+            for term in query_terms:
+                if term in title:
+                    score += 3
+                if term in summary:
+                    score += 2
+                if any(term in tag for tag in tags):
+                    score += 1
+            
+            if score > 0:
+                matches.append({
+                    'doc': doc,
+                    'score': score
+                })
+        
+        # Sort by score and limit results
+        matches.sort(key=lambda x: x['score'], reverse=True)
+        matches = matches[:limit]
+        
+        # Convert to format expected by conversational service
+        search_results = []
+        for match in matches:
+            doc = match['doc']
+            search_results.append({
+                'document_title': doc.get('title', ''),
+                'document_url': doc.get('source_url', ''),
+                'content': doc.get('summary', '')[:500],
+                'similarity': match['score'] / 10.0
+            })
+        
+        # Generate conversational response
+        conversational_service = ConversationalSearchService()
+        response = await conversational_service.get_conversational_response(q, search_results)
+        
+        return response
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Conversational search failed: {str(e)}")
