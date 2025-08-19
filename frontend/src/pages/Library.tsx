@@ -13,10 +13,10 @@ import {
 interface Document {
   id: string;
   title: string;
-  summary: string;
+  summary?: string;
   source_url?: string;
-  tags: string[];
-  insights: Array<{ text: string; relevance_score: number }>;
+  tags?: string[];
+  insights?: Array<{ text: string; relevance_score: number }>;
   processing_status: string;
   created_at: string;
   updated_at: string;
@@ -46,7 +46,9 @@ const Library: React.FC = () => {
       }
 
       const data = await response.json();
-      setDocuments(data.documents || []);
+      console.log('API Response:', data);
+      console.log('Documents:', data.items);
+      setDocuments(data.items || []);
     } catch (error: any) {
       toast.error(error.message || 'Failed to fetch documents');
     } finally {
@@ -81,7 +83,9 @@ const Library: React.FC = () => {
   const getAllTags = () => {
     const allTags = new Set<string>();
     documents.forEach(doc => {
-      doc.tags.forEach(tag => allTags.add(tag));
+      if (doc.tags) {
+        doc.tags.forEach(tag => allTags.add(tag));
+      }
     });
     return Array.from(allTags).sort();
   };
@@ -89,12 +93,12 @@ const Library: React.FC = () => {
   const filteredDocuments = documents.filter(doc => {
     // Filter by search term
     if (searchTerm && !doc.title.toLowerCase().includes(searchTerm.toLowerCase()) &&
-        !doc.summary.toLowerCase().includes(searchTerm.toLowerCase())) {
+        !(doc.summary && doc.summary.toLowerCase().includes(searchTerm.toLowerCase()))) {
       return false;
     }
 
     // Filter by selected tags
-    if (selectedTags.length > 0 && !selectedTags.some(tag => doc.tags.includes(tag))) {
+    if (selectedTags.length > 0 && !(doc.tags && selectedTags.some(tag => doc.tags.includes(tag)))) {
       return false;
     }
 
@@ -218,29 +222,33 @@ const Library: React.FC = () => {
               </h3>
 
               {/* Summary */}
-              <p className="text-gray-600 text-sm mb-4 line-clamp-3">
-                {doc.summary}
-              </p>
+              {doc.summary && (
+                <p className="text-gray-600 text-sm mb-4 line-clamp-3">
+                  {doc.summary}
+                </p>
+              )}
 
               {/* Tags */}
-              <div className="flex flex-wrap gap-1 mb-4">
-                {doc.tags.slice(0, 3).map(tag => (
-                  <span
-                    key={tag}
-                    className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded-full"
-                  >
-                    {tag}
-                  </span>
-                ))}
-                {doc.tags.length > 3 && (
-                  <span className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded-full">
-                    +{doc.tags.length - 3} more
-                  </span>
-                )}
-              </div>
+              {doc.tags && doc.tags.length > 0 && (
+                <div className="flex flex-wrap gap-1 mb-4">
+                  {doc.tags.slice(0, 3).map(tag => (
+                    <span
+                      key={tag}
+                      className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded-full"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                  {doc.tags.length > 3 && (
+                    <span className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded-full">
+                      +{doc.tags.length - 3} more
+                    </span>
+                  )}
+                </div>
+              )}
 
               {/* Insights */}
-              {doc.insights.length > 0 && (
+              {doc.insights && doc.insights.length > 0 && (
                 <div className="mb-4">
                   <h4 className="text-sm font-medium text-gray-900 mb-2">Key Insights</h4>
                   <ul className="space-y-1">
