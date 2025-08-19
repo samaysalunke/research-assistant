@@ -71,6 +71,10 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     log_format: str = "json"
     
+    # Server Configuration
+    workers: int = 1
+    reload: bool = True
+    
     class Config:
         extra = "ignore"
         env_file = ".env"

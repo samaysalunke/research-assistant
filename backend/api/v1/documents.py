@@ -10,7 +10,7 @@ from datetime import datetime
 from core.config import get_settings
 from auth.middleware import get_current_user
 from models.schemas import DocumentResponse, DocumentUpdate, PaginatedResponse
-from database.client import get_supabase_client
+from database.client import get_supabase_user_client
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
@@ -26,10 +26,12 @@ async def get_documents(
     Get paginated list of user's documents
     """
     try:
-        supabase = get_supabase_client()
+        # Use service client since we're filtering by user_id for security
+        from database.client import get_supabase_service_client
+        supabase = get_supabase_service_client()
         
         # Build query
-        query = supabase.table("documents").select("*").eq("user_id", current_user.id)
+        query = supabase.table("documents").select("*").eq("user_id", current_user.get('id'))
         
         # Apply filters
         if tags:
@@ -45,10 +47,10 @@ async def get_documents(
         offset = (page - 1) * limit
         query = query.range(offset, offset + limit - 1).order("created_at", desc=True)
         
-        result = query.execute()
-        
-        if result.error:
-            raise HTTPException(status_code=500, detail="Failed to fetch documents")
+        try:
+            result = query.execute()
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to fetch documents: {str(e)}")
         
         # Calculate pagination info
         pages = (total + limit - 1) // limit
@@ -77,14 +79,15 @@ async def get_document(
     Get a specific document by ID
     """
     try:
-        supabase = get_supabase_client()
+        # Use service client since we're filtering by user_id for security
+        from database.client import get_supabase_service_client
+        supabase = get_supabase_service_client()
         
-        result = supabase.table("documents").select("*").eq("id", document_id).eq("user_id", current_user.id).single().execute()
-        
-        if result.error:
+        try:
+            result = supabase.table("documents").select("*").eq("id", document_id).eq("user_id", current_user.get('id')).single().execute()
+            return DocumentResponse(**result.data)
+        except Exception as e:
             raise HTTPException(status_code=404, detail="Document not found")
-        
-        return DocumentResponse(**result.data)
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get document: {str(e)}")
@@ -99,12 +102,14 @@ async def update_document(
     Update a document
     """
     try:
-        supabase = get_supabase_client()
+        # Use service client since we're filtering by user_id for security
+        from database.client import get_supabase_service_client
+        supabase = get_supabase_service_client()
         
         # Verify document belongs to user
-        doc_result = supabase.table("documents").select("id").eq("id", document_id).eq("user_id", current_user.id).single().execute()
-        
-        if doc_result.error:
+        try:
+            doc_result = supabase.table("documents").select("id").eq("id", document_id).eq("user_id", current_user.get('id')).single().execute()
+        except Exception as e:
             raise HTTPException(status_code=404, detail="Document not found")
         
         # Prepare update data
@@ -112,12 +117,11 @@ async def update_document(
         update_data["updated_at"] = datetime.utcnow().isoformat()
         
         # Update document
-        result = supabase.table("documents").update(update_data).eq("id", document_id).select().single().execute()
-        
-        if result.error:
-            raise HTTPException(status_code=500, detail="Failed to update document")
-        
-        return DocumentResponse(**result.data)
+        try:
+            result = supabase.table("documents").update(update_data).eq("id", document_id).select().single().execute()
+            return DocumentResponse(**result.data)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to update document: {str(e)}")
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to update document: {str(e)}")

@@ -21,7 +21,7 @@ async def get_current_user(
         credentials: HTTP Bearer token credentials
         
     Returns:
-        Dict containing user information
+        Dict containing user information and access token
         
     Raises:
         HTTPException: If token is invalid or expired
@@ -45,7 +45,19 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    return user
+
+    
+    # Add access token to user object for RLS operations
+    if hasattr(user, 'dict'):
+        user_dict = user.dict()
+    elif hasattr(user, '__dict__'):
+        user_dict = user.__dict__
+    else:
+        user_dict = dict(user) if user else {}
+    
+    user_dict['access_token'] = token
+    
+    return user_dict
 
 async def get_current_user_optional(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)

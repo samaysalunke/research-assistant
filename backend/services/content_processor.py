@@ -256,8 +256,8 @@ Return as JSON array:
     async def generate_embeddings(self, document_id: str, chunks: List[Dict[str, Any]]):
         """Generate embeddings for content chunks"""
         try:
-            from backend.database.client import get_supabase_client
-            supabase = get_supabase_client()
+            from database.client import get_supabase_service_client
+            supabase = get_supabase_service_client()
             
             for chunk in chunks:
                 # Generate embedding for chunk text

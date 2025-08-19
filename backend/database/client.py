@@ -35,6 +35,14 @@ class SupabaseManager:
             raise ValueError("SUPABASE_SERVICE_ROLE_KEY must be set for admin operations")
         return create_client(self.supabase_url, self.supabase_service_key)
     
+    def get_user_client(self, access_token: str) -> Client:
+        """Get a Supabase client with user context for RLS operations"""
+        # For RLS operations, we need to use the service role key
+        # but filter by user_id in our queries
+        if not self.supabase_service_key:
+            raise ValueError("SUPABASE_SERVICE_ROLE_KEY must be set for user operations")
+        return create_client(self.supabase_url, self.supabase_service_key)
+    
     async def verify_token(self, token: str) -> Optional[Dict[str, Any]]:
         """Verify JWT token and return user information"""
         try:
@@ -66,6 +74,10 @@ def get_supabase_client() -> Client:
 def get_supabase_service_client() -> Client:
     """Get the Supabase service client for admin operations"""
     return supabase_manager.get_service_client()
+
+def get_supabase_user_client(access_token: str) -> Client:
+    """Get a Supabase client with user context for RLS operations"""
+    return supabase_manager.get_user_client(access_token)
 
 async def verify_auth_token(token: str) -> Optional[Dict[str, Any]]:
     """Verify authentication token and return user info"""

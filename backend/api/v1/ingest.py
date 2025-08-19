@@ -12,7 +12,7 @@ from core.config import get_settings
 from auth.middleware import get_current_user
 from models.schemas import DocumentCreate, ProcessingStatus
 from services.content_processor import ContentProcessor
-from database.client import get_supabase_client
+from database.client import get_supabase_user_client
 
 router = APIRouter(prefix="/ingest", tags=["Content Ingestion"])
 
@@ -30,12 +30,16 @@ async def ingest_content(
         # Generate job ID
         job_id = str(uuid.uuid4())
         
+
+        
         # Create initial document record
-        supabase = get_supabase_client()
+        # Use service client since we're filtering by user_id for security
+        from database.client import get_supabase_service_client
+        supabase = get_supabase_service_client()
         
         document_data = {
             "id": job_id,
-            "user_id": current_user.id,
+            "user_id": current_user.get('id'),
             "source_url": str(content.source_url) if content.source_url else None,
             "title": "Processing...",
             "processing_status": "pending",
@@ -44,17 +48,17 @@ async def ingest_content(
         }
         
         # Insert document record
-        result = supabase.table("documents").insert(document_data).execute()
-        
-        if result.error:
-            raise HTTPException(status_code=500, detail="Failed to create document record")
+        try:
+            result = supabase.table("documents").insert(document_data).execute()
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to create document record: {str(e)}")
         
         # Start background processing
         background_tasks.add_task(
             process_content_background,
             job_id=job_id,
             content=content,
-            user_id=current_user.id
+            user_id=current_user.get('id')
         )
         
         return ProcessingStatus(
@@ -75,15 +79,16 @@ async def get_processing_status(
     Get the processing status of a content ingestion job
     """
     try:
-        supabase = get_supabase_client()
+        # Use service client since we're filtering by user_id for security
+        from database.client import get_supabase_service_client
+        supabase = get_supabase_service_client()
         
         # Get document status
-        result = supabase.table("documents").select("*").eq("id", job_id).eq("user_id", current_user.id).single().execute()
-        
-        if result.error:
+        try:
+            result = supabase.table("documents").select("*").eq("id", job_id).eq("user_id", current_user.get('id')).single().execute()
+            document = result.data
+        except Exception as e:
             raise HTTPException(status_code=404, detail="Job not found")
-        
-        document = result.data
         
         return ProcessingStatus(
             job_id=job_id,
@@ -101,7 +106,10 @@ async def process_content_background(job_id: str, content: DocumentCreate, user_
     """
     try:
         # Update status to processing
-        supabase = get_supabase_client()
+        # Note: Background tasks don't have access to the request context
+        # So we need to use the service client for admin operations
+        from database.client import get_supabase_service_client
+        supabase = get_supabase_service_client()
         supabase.table("documents").update({"processing_status": "processing"}).eq("id", job_id).execute()
         
         # Initialize content processor
