@@ -98,122 +98,111 @@ A powerful AI-driven research assistant that transforms digital content into str
    npm install
    ```
 
-4. **Start the application**
+4. **Start the development servers**
    ```bash
-   # Backend (from backend directory)
+   # Backend (in one terminal)
+   cd backend
    uvicorn main:app --reload --port 8000
    
-   # Frontend (from frontend directory)
+   # Frontend (in another terminal)
+   cd frontend
    npm run dev
    ```
 
-### **Using the Application**
-
-#### **Content Ingestion**
-1. **Upload PDFs**: Drag and drop PDF files or use the file picker
-2. **Add URLs**: Enter web URLs to extract and analyze content
-3. **Direct Text**: Paste text content directly for processing
-4. **Monitor Progress**: Track processing status in real-time
-
-#### **Conversational Search**
-1. **Ask Questions**: Use natural language queries like "What is the connection between reading and writing?"
-2. **Get AI Responses**: Receive comprehensive, synthesized answers
-3. **Explore Sources**: View the documents that informed the response
-4. **Follow-up Suggestions**: Get intelligent suggestions for related questions
-
-#### **Advanced Search**
-1. **Multiple Search Types**: Choose from semantic, keyword, hybrid, tag, or content-type search
-2. **Smart Filtering**: Filter results by quality, language, tags, or date ranges
-3. **Sorting Options**: Sort by relevance, date, quality, or reading time
-4. **Export Results**: Save and share search results
-
-## 🔧 Configuration
-
-### **Environment Variables**
-```bash
-# Supabase Configuration
-SUPABASE_URL=your_supabase_url
-SUPABASE_ANON_KEY=your_supabase_anon_key
-SUPABASE_SERVICE_KEY=your_supabase_service_key
-
-# AI Services
-ANTHROPIC_API_KEY=your_anthropic_api_key
-OPENAI_API_KEY=your_openai_api_key
-
-# Application Settings
-ENVIRONMENT=development
-DEBUG=true
-CORS_ORIGINS=http://localhost:5173
-```
-
-### **Database Setup**
-1. Create a Supabase project
-2. Enable the `pgvector` extension
-3. Run the provided migration scripts
-4. Configure Row Level Security policies
-
-## 📊 Performance
-
-### **Processing Capabilities**
-- **PDF Processing**: Up to 50MB files, multi-page support
-- **Web Scraping**: Intelligent content extraction with fallback mechanisms
-- **AI Processing**: Parallel processing with background tasks
-- **Search Performance**: Sub-second response times with vector indexing
-
-### **Scalability**
-- **Horizontal Scaling**: Stateless backend design
-- **Database Optimization**: Efficient indexing and query optimization
-- **Caching**: Intelligent caching for frequently accessed content
-- **Background Processing**: Non-blocking content processing
-
-## 🔒 Security
-
-### **Data Protection**
-- **Row Level Security**: User data isolation
-- **JWT Authentication**: Secure token-based authentication
-- **Input Validation**: Comprehensive input sanitization
-- **File Upload Security**: Secure PDF processing with validation
-
-### **Privacy**
-- **Local Processing**: Content processed on your infrastructure
-- **No Data Sharing**: Your data stays private
-- **Configurable Retention**: Control data retention policies
-
-## 🧪 Testing
-
-### **API Testing**
-```bash
-# Test the API endpoints
-curl http://localhost:8000/health
-curl http://localhost:8000/api/v1/search/conversational?q=test
-```
-
-### **Frontend Testing**
-```bash
-cd frontend
-npm run test
-npm run build
-```
-
-## 📚 Documentation
-
-- **[User Guide](docs/USER_GUIDE.md)**: Complete user documentation
-- **[Developer Guide](docs/DEVELOPER_GUIDE.md)**: Development setup and guidelines
-- **[API Reference](docs/API_REFERENCE.md)**: Complete API documentation
-- **[Deployment Guide](docs/DEPLOYMENT_GUIDE.md)**: Production deployment instructions
+5. **Open your browser**
+   - Frontend: http://localhost:5173
+   - Backend API: http://localhost:8000
+   - API Docs: http://localhost:8000/docs
 
 ## 🚀 Deployment
 
-### **Quick Deploy Options**
-- **Railway**: One-click deployment with automatic scaling
-- **Render**: Free tier available with easy setup
-- **Vercel**: Frontend deployment with serverless functions
+### **Quick Deploy to Railway**
 
-### **Production Setup**
-- **Docker**: Containerized deployment
-- **Cloud Platforms**: AWS, GCP, Azure support
-- **Monitoring**: Built-in health checks and logging
-- **SSL/TLS**: Automatic HTTPS configuration
+The easiest way to deploy this application is using Railway:
+
+1. **Fork this repository** to your GitHub account
+2. **Sign up for Railway** at [railway.app](https://railway.app)
+3. **Create a new project** and connect your GitHub repository
+4. **Configure environment variables** (see `RAILWAY_DEPLOYMENT.md`)
+5. **Deploy!** Railway will automatically build and deploy your app
+
+### **Manual Deployment**
+
+For other platforms, see the detailed deployment guide in `RAILWAY_DEPLOYMENT.md`.
+
+### **Environment Variables**
+
+Set these environment variables in your deployment platform:
+
+```bash
+# Required
+SUPABASE_URL=your_supabase_url
+SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+ANTHROPIC_API_KEY=your_anthropic_api_key
+OPENAI_API_KEY=your_openai_api_key
+
+# Optional (with defaults)
+ENVIRONMENT=production
+DEBUG=false
+SECRET_KEY=your_secure_random_key
+CORS_ORIGINS=https://your-domain.com
+```
+
+## 📚 API Documentation
+
+### **Core Endpoints**
+
+- `POST /api/v1/ingest/` - Ingest content from URL or text
+- `POST /api/v1/ingest/pdf` - Upload and process PDF files
+- `GET /api/v1/search/` - Search documents
+- `POST /api/v1/conversation/query` - Conversational search
+- `GET /api/v1/documents/` - List user documents
+
+### **Authentication**
+
+All endpoints require JWT authentication via Supabase Auth.
+
+## 🔧 Configuration
+
+### **Database Setup**
+
+1. Create a Supabase project
+2. Apply all migrations in `database/migrations/`
+3. Configure RLS policies
+4. Set up authentication
+
+### **AI Models**
+
+- **Anthropic Claude 3.5 Sonnet**: For content analysis and conversational responses
+- **OpenAI text-embedding-3-small**: For vector embeddings
+
+## 🧪 Testing
+
+```bash
+# Backend tests
+cd backend
+python -m pytest
+
+# Frontend tests
+cd frontend
+npm test
+```
+
+## 📈 Performance
+
+- **Content Processing**: ~30-60 seconds per document
+- **Search Response**: <2 seconds for most queries
+- **Conversational AI**: <5 seconds for responses
+- **PDF Processing**: ~10-30 seconds depending on file size
+
+## 🔒 Security
+
+- **Row Level Security**: Database-level access control
+- **JWT Authentication**: Secure token-based auth
+- **CORS Protection**: Configured for production domains
+- **Input Validation**: Pydantic models for all inputs
+- **Rate Limiting**: Built-in protection against abuse
 
 ## 🤝 Contributing
 
@@ -223,38 +212,16 @@ npm run build
 4. Add tests
 5. Submit a pull request
 
-### **Development Guidelines**
-- Follow TypeScript best practices
-- Use conventional commits
-- Add comprehensive tests
-- Update documentation
-
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License - see the LICENSE file for details.
 
 ## 🆘 Support
 
-- **Issues**: Report bugs and feature requests on GitHub
-- **Discussions**: Join community discussions
-- **Documentation**: Comprehensive guides and tutorials
-- **Examples**: Sample queries and use cases
-
-## 🗺️ Roadmap
-
-### **Upcoming Features**
-- **Video Processing**: YouTube and video content analysis
-- **Multi-language Support**: Internationalization and translation
-- **Collaborative Features**: Team workspaces and sharing
-- **Advanced Analytics**: Usage insights and content metrics
-- **Mobile App**: Native iOS and Android applications
-
-### **Enhancements**
-- **Voice Search**: Speech-to-text search capabilities
-- **Export Options**: Multiple format export (PDF, Word, Markdown)
-- **Integration APIs**: Third-party service integrations
-- **Advanced AI Models**: Support for additional AI providers
+- **Documentation**: Check the `docs/` folder
+- **Issues**: Report bugs on GitHub
+- **Discussions**: Use GitHub Discussions for questions
 
 ---
 
-**Built with ❤️ using modern web technologies and AI**
+**Built with ❤️ using FastAPI, React, and Claude AI**

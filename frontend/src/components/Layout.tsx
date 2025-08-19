@@ -6,7 +6,9 @@ import {
   BookOpenIcon, 
   MagnifyingGlassIcon,
   UserCircleIcon,
-  ArrowRightOnRectangleIcon
+  ArrowRightOnRectangleIcon,
+  ChatBubbleLeftRightIcon,
+  DocumentArrowUpIcon
 } from '@heroicons/react/24/outline';
 
 const Layout: React.FC = () => {
@@ -17,6 +19,8 @@ const Layout: React.FC = () => {
     { name: 'Dashboard', href: '/', icon: HomeIcon },
     { name: 'Library', href: '/library', icon: BookOpenIcon },
     { name: 'Search', href: '/search', icon: MagnifyingGlassIcon },
+    { name: 'Conversation', href: '/conversation', icon: ChatBubbleLeftRightIcon },
+    { name: 'Upload PDF', href: '/upload', icon: DocumentArrowUpIcon },
   ];
 
   const handleSignOut = async () => {

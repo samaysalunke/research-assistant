@@ -7,6 +7,8 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Library from './pages/Library';
 import Search from './pages/Search';
+import ConversationalSearch from './components/ConversationalSearch';
+import PDFUpload from './components/PDFUpload';
 import './index.css';
 
 // Protected Route Component
@@ -42,6 +44,8 @@ function App() {
               <Route index element={<Dashboard />} />
               <Route path="library" element={<Library />} />
               <Route path="search" element={<Search />} />
+              <Route path="conversation" element={<ConversationalSearch />} />
+              <Route path="upload" element={<PDFUpload />} />
             </Route>
           </Routes>
           <Toaster position="top-right" />
