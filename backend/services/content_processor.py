@@ -277,30 +277,22 @@ Return as JSON array:
             print(f"Failed to generate embeddings: {str(e)}")
     
     async def _generate_embedding(self, text: str) -> List[float]:
-        """Generate embedding for text using Claude"""
+        """Generate embedding for text using OpenAI (since Anthropic doesn't have embeddings)"""
         try:
-            # Try Anthropic embeddings first
-            response = self.client.embeddings.create(
-                model=self.settings.claude_embedding_model,
+            # Use OpenAI embeddings (Anthropic doesn't provide embeddings)
+            import openai
+            openai_client = openai.OpenAI(api_key=self.settings.openai_api_key)
+            response = openai_client.embeddings.create(
+                model="text-embedding-3-small",  # Use small model for cost efficiency
                 input=text
             )
-            return response.embeddings[0].embedding
-        except (AttributeError, Exception) as e:
-            # Fallback to OpenAI embeddings if Anthropic fails
-            try:
-                import openai
-                openai_client = openai.OpenAI(api_key=self.settings.openai_api_key)
-                response = openai_client.embeddings.create(
-                    model="text-embedding-3-small",
-                    input=text
-                )
-                return response.data[0].embedding
-            except Exception as openai_error:
-                # Final fallback: hash-based embedding
-                print(f"Warning: Both Anthropic and OpenAI embeddings failed, using fallback. Errors: {str(e)}, {str(openai_error)}")
-                import hashlib
-                hash_obj = hashlib.md5(text.encode())
-                hash_bytes = hash_obj.digest()
-                # Convert to list of floats (3072 dimensions)
-                embedding = [float(b) / 255.0 for b in hash_bytes] * 96  # 32 * 96 = 3072
-                return embedding[:3072]
+            return response.data[0].embedding
+        except Exception as e:
+            # Fallback: hash-based embedding
+            print(f"Warning: OpenAI embeddings failed, using fallback. Error: {str(e)}")
+            import hashlib
+            hash_obj = hashlib.md5(text.encode())
+            hash_bytes = hash_obj.digest()
+            # Convert to list of floats (1536 dimensions for text-embedding-3-small)
+            embedding = [float(b) / 255.0 for b in hash_bytes] * 48  # 32 * 48 = 1536
+            return embedding[:1536]

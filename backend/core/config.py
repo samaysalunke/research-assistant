@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     # Anthropic Claude Configuration
     anthropic_api_key: str
     claude_model: str = "claude-3-5-sonnet-20241022"
-    claude_embedding_model: str = "text-embedding-3-large"
+    claude_embedding_model: str = "text-embedding-3-large"  # OpenAI model for embeddings
     
     # OpenAI Configuration (fallback for embeddings)
     openai_api_key: Optional[str] = None
@@ -61,7 +61,7 @@ class Settings(BaseSettings):
     # Search Configuration
     search_limit: int = 20
     similarity_threshold: float = 0.7
-    vector_dimension: int = 3072  # Claude's text-embedding-3-large
+    vector_dimension: int = 1536  # OpenAI's text-embedding-3-small
     
     # Rate Limiting
     rate_limit_per_minute: int = 60
