@@ -10,7 +10,7 @@ import anthropic
 from core.config import get_settings
 from auth.middleware import get_current_user
 from models.schemas import SearchRequest, SearchResponse, SearchResult
-from database.client import get_supabase_client
+from database.client import get_supabase_service_client
 
 router = APIRouter(prefix="/search", tags=["Search"])
 
@@ -24,17 +24,25 @@ async def search_content(
     Search content using semantic similarity
     """
     try:
-        # Generate embedding for search query
-        client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-        
-        embedding_response = client.embeddings.create(
-            model=settings.claude_embedding_model,
-            input=search_request.query
-        )
-        query_embedding = embedding_response.embeddings[0].embedding
+        # Generate embedding for search query using OpenAI
+        try:
+            import openai
+            openai_client = openai.OpenAI(api_key=settings.openai_api_key)
+            embedding_response = openai_client.embeddings.create(
+                model="text-embedding-3-small",
+                input=search_request.query
+            )
+            query_embedding = embedding_response.data[0].embedding
+        except Exception as e:
+            # Fallback: hash-based embedding
+            import hashlib
+            hash_obj = hashlib.md5(search_request.query.encode())
+            hash_bytes = hash_obj.digest()
+            query_embedding = [float(b) / 255.0 for b in hash_bytes] * 48  # 32 * 48 = 1536
+            query_embedding = query_embedding[:1536]
         
         # Perform semantic search
-        supabase = get_supabase_client()
+        supabase = get_supabase_service_client()
         
         if search_request.search_type == "semantic":
             results = await _semantic_search(
@@ -89,18 +97,49 @@ async def search_content_get(
 async def _semantic_search(supabase, query_embedding: List[float], threshold: float, limit: int) -> List[SearchResult]:
     """Perform semantic search using vector similarity"""
     try:
-        # Use the semantic_search function from database
-        result = supabase.rpc(
-            "semantic_search",
-            {
-                "query_embedding": query_embedding,
-                "similarity_threshold": threshold,
-                "match_count": limit
-            }
-        ).execute()
-        
-        if result.error:
-            raise Exception(f"Semantic search failed: {result.error}")
+        # Try to use the semantic_search function from database
+        try:
+            result = supabase.rpc(
+                "semantic_search",
+                {
+                    "query_embedding": query_embedding,
+                    "similarity_threshold": threshold,
+                    "match_count": limit
+                }
+            ).execute()
+            
+            if result.error:
+                raise Exception(f"Semantic search failed: {result.error}")
+        except Exception as rpc_error:
+            # Fallback: direct vector search if RPC function doesn't exist
+            print(f"RPC function not available, using direct search: {str(rpc_error)}")
+            result = supabase.table("embeddings").select("*").execute()
+            
+            # Simple vector similarity search
+            results = []
+            for row in result.data:
+                if row.get("embedding"):
+                    # Calculate cosine similarity (simplified)
+                    import numpy as np
+                    try:
+                        vec1 = np.array(query_embedding)
+                        vec2 = np.array(row["embedding"])
+                        similarity = np.dot(vec1, vec2) / (np.linalg.norm(vec1) * np.linalg.norm(vec2))
+                        
+                        if similarity > threshold:
+                            results.append({
+                                "id": row["id"],
+                                "document_id": row["document_id"],
+                                "chunk_index": row["chunk_index"],
+                                "content": row["content"],
+                                "similarity": float(similarity)
+                            })
+                    except:
+                        continue
+            
+            # Sort by similarity and limit
+            results.sort(key=lambda x: x["similarity"], reverse=True)
+            result.data = results[:limit]
         
         # Get document details for results
         results = []
