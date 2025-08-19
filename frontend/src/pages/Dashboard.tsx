@@ -50,7 +50,18 @@ const Dashboard: React.FC = () => {
 
       const result = await response.json();
       
-      // Add job to list
+      // Handle different response statuses
+      if (result.status === 'completed') {
+        toast.success(result.message || 'This URL has already been processed!');
+        setUrl('');
+        return;
+      } else if (result.status === 'pending' || result.status === 'processing') {
+        toast.info(result.message || 'Content is already being processed');
+        setUrl('');
+        return;
+      }
+      
+      // Add job to list for new processing
       setJobs(prev => [{
         id: result.job_id,
         status: 'pending',

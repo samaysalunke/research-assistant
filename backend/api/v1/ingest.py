@@ -27,16 +27,45 @@ async def ingest_content(
     Ingest content from URL or direct text input
     """
     try:
-        # Generate job ID
-        job_id = str(uuid.uuid4())
-        
-
-        
-        # Create initial document record
         # Use service client since we're filtering by user_id for security
         from database.client import get_supabase_service_client
         supabase = get_supabase_service_client()
         
+        # Check for duplicate URL if source_url is provided
+        if content.source_url:
+            try:
+                existing_doc = supabase.table("documents").select("id, title, processing_status").eq("user_id", current_user.get('id')).eq("source_url", str(content.source_url)).execute()
+                
+                if existing_doc.data and len(existing_doc.data) > 0:
+                    existing = existing_doc.data[0]
+                    if existing["processing_status"] == "pending":
+                        return ProcessingStatus(
+                            job_id=existing["id"],
+                            status="pending",
+                            message="Content is already being processed"
+                        )
+                    elif existing["processing_status"] == "processing":
+                        return ProcessingStatus(
+                            job_id=existing["id"],
+                            status="processing",
+                            message="Content is currently being processed"
+                        )
+                    elif existing["processing_status"] == "completed":
+                        return ProcessingStatus(
+                            job_id=existing["id"],
+                            status="completed",
+                            message="This URL has already been processed"
+                        )
+                    else:
+                        # If failed, we can retry
+                        pass
+            except Exception as e:
+                print(f"Error checking for duplicate URL: {str(e)}")
+        
+        # Generate job ID
+        job_id = str(uuid.uuid4())
+        
+        # Create initial document record
         document_data = {
             "id": job_id,
             "user_id": current_user.get('id'),
@@ -51,7 +80,35 @@ async def ingest_content(
         try:
             result = supabase.table("documents").insert(document_data).execute()
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to create document record: {str(e)}")
+            # Check if it's a duplicate URL constraint violation
+            if "duplicate key value violates unique constraint" in str(e).lower() or "unique_user_url" in str(e):
+                # Try to get the existing document
+                try:
+                    existing_doc = supabase.table("documents").select("id, title, processing_status").eq("user_id", current_user.get('id')).eq("source_url", str(content.source_url)).single().execute()
+                    existing = existing_doc.data
+                    
+                    if existing["processing_status"] == "completed":
+                        return ProcessingStatus(
+                            job_id=existing["id"],
+                            status="completed",
+                            message="This URL has already been processed"
+                        )
+                    elif existing["processing_status"] in ["pending", "processing"]:
+                        return ProcessingStatus(
+                            job_id=existing["id"],
+                            status=existing["processing_status"],
+                            message=f"Content is already {existing['processing_status']}"
+                        )
+                    else:
+                        return ProcessingStatus(
+                            job_id=existing["id"],
+                            status=existing["processing_status"],
+                            message="This URL has already been submitted"
+                        )
+                except Exception as lookup_error:
+                    raise HTTPException(status_code=400, detail="This URL has already been submitted")
+            else:
+                raise HTTPException(status_code=500, detail=f"Failed to create document record: {str(e)}")
         
         # Start background processing
         background_tasks.add_task(
