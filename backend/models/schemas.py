@@ -129,6 +129,48 @@ class ChatResponse(BaseModel):
     sources: List[Dict[str, Any]]
     confidence: float = Field(..., ge=0.0, le=1.0)
 
+# Enhanced Conversational Models
+class ConversationalQuery(BaseModel):
+    """Enhanced conversational query model"""
+    query: str = Field(..., min_length=1, description="User's question or query")
+    conversation_id: Optional[str] = Field(None, description="Conversation ID for multi-turn chats")
+    context_documents: Optional[List[str]] = Field(None, description="Specific document IDs to focus on")
+    response_type: str = Field("comprehensive", pattern="^(comprehensive|summary|detailed|bullet_points)$", description="Type of response desired")
+    include_sources: bool = Field(True, description="Whether to include source information")
+    max_sources: int = Field(5, ge=1, le=10, description="Maximum number of sources to include")
+
+class ConversationalResponse(BaseModel):
+    """Enhanced conversational response model"""
+    response: str = Field(..., description="AI-generated response")
+    conversation_id: str = Field(..., description="Conversation ID for tracking")
+    sources: List[Dict[str, Any]] = Field(..., description="Source documents used")
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence score")
+    suggestions: List[str] = Field(..., description="Follow-up suggestions")
+    response_type: str = Field(..., description="Type of response provided")
+    metadata: Dict[str, Any] = Field(..., description="Additional metadata")
+    query_analysis: Dict[str, Any] = Field(..., description="Analysis of the user's query")
+
+class ConversationSession(BaseModel):
+    """Conversation session model"""
+    session_id: str = Field(..., description="Unique session identifier")
+    user_id: str = Field(..., description="User ID")
+    created_at: datetime = Field(..., description="Session creation time")
+    last_activity: datetime = Field(..., description="Last activity time")
+    message_count: int = Field(0, description="Number of messages in session")
+    context_documents: List[str] = Field([], description="Documents referenced in conversation")
+    conversation_summary: Optional[str] = Field(None, description="Summary of conversation")
+
+class ConversationMessage(BaseModel):
+    """Individual conversation message"""
+    message_id: str = Field(..., description="Unique message ID")
+    session_id: str = Field(..., description="Session ID")
+    user_message: str = Field(..., description="User's message")
+    ai_response: str = Field(..., description="AI's response")
+    timestamp: datetime = Field(..., description="Message timestamp")
+    sources_used: List[Dict[str, Any]] = Field(..., description="Sources used for response")
+    confidence: float = Field(..., description="Response confidence")
+    query_intent: Optional[str] = Field(None, description="Detected query intent")
+
 # Processing Models
 class ProcessingStatus(BaseModel):
     """Processing status model"""

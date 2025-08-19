@@ -9,7 +9,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import os
 
 # Import routers
-from api.v1 import ingest, search, documents
+from api.v1 import ingest, search, documents, conversation
 from core.config import get_settings
 
 # Get settings
@@ -44,7 +44,7 @@ async def health_check():
         "status": "healthy",
         "service": "research-insights-agent",
         "version": "0.1.0",
-        "milestone": "2 - Core Backend API"
+        "milestone": "3 - Enhanced Conversational Features"
     }
 
 # Root endpoint
@@ -59,7 +59,8 @@ async def root():
         "endpoints": {
             "ingest": "/api/v1/ingest",
             "search": "/api/v1/search", 
-            "documents": "/api/v1/documents"
+            "documents": "/api/v1/documents",
+            "conversation": "/api/v1/conversation"
         }
     }
 
@@ -67,6 +68,7 @@ async def root():
 app.include_router(ingest.router, prefix="/api/v1")
 app.include_router(search.router, prefix="/api/v1")
 app.include_router(documents.router, prefix="/api/v1")
+app.include_router(conversation.router, prefix="/api/v1")
 
 if __name__ == "__main__":
     import uvicorn
