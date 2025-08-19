@@ -110,59 +110,80 @@ async def _semantic_search(supabase, query_embedding: List[float], threshold: fl
             
             if result.error:
                 raise Exception(f"Semantic search failed: {result.error}")
+                
+            # RPC function worked, process results
+            search_results = []
+            for row in result.data:
+                doc_result = supabase.table("documents").select("title, source_url").eq("id", row["document_id"]).single().execute()
+                
+                if doc_result.data:
+                    search_results.append(SearchResult(
+                        id=row["id"],
+                        document_id=row["document_id"],
+                        chunk_index=row["chunk_index"],
+                        content=row["content"],
+                        similarity=row["similarity"],
+                        document_title=doc_result.data["title"],
+                        document_url=doc_result.data.get("source_url")
+                    ))
+            
+            return search_results
+            
         except Exception as rpc_error:
             # Fallback: direct vector search if RPC function doesn't exist
             print(f"RPC function not available, using direct search: {str(rpc_error)}")
-            result = supabase.table("embeddings").select("*").execute()
             
-                    # Simple vector similarity search
-        results = []
-        for row in result.data:
-            if row.get("embedding"):
-                # Parse embedding from JSON string
-                import json
-                try:
-                    embedding = json.loads(row["embedding"]) if isinstance(row["embedding"], str) else row["embedding"]
-                    
-                    # Calculate cosine similarity
-                    import numpy as np
-                    vec1 = np.array(query_embedding)
-                    vec2 = np.array(embedding)
-                    similarity = np.dot(vec1, vec2) / (np.linalg.norm(vec1) * np.linalg.norm(vec2))
-                    
-                    if similarity > threshold:
-                        results.append({
-                            "id": row["id"],
-                            "document_id": row["document_id"],
-                            "chunk_index": row["chunk_index"],
-                            "content": row["content"],
-                            "similarity": float(similarity)
-                        })
-                except Exception as e:
-                    print(f"Error processing embedding: {str(e)}")
-                    continue
+            # Get all embeddings
+            embeddings_result = supabase.table("embeddings").select("*").execute()
+            
+            # Simple vector similarity search
+            search_results = []
+            for row in embeddings_result.data:
+                if row.get("embedding"):
+                    # Parse embedding from JSON string
+                    import json
+                    try:
+                        embedding = json.loads(row["embedding"]) if isinstance(row["embedding"], str) else row["embedding"]
+                        
+                        # Calculate cosine similarity
+                        import numpy as np
+                        vec1 = np.array(query_embedding)
+                        vec2 = np.array(embedding)
+                        similarity = np.dot(vec1, vec2) / (np.linalg.norm(vec1) * np.linalg.norm(vec2))
+                        
+                        if similarity > threshold:
+                            search_results.append({
+                                "id": row["id"],
+                                "document_id": row["document_id"],
+                                "chunk_index": row["chunk_index"],
+                                "content": row["content"],
+                                "similarity": float(similarity)
+                            })
+                    except Exception as e:
+                        print(f"Error processing embedding: {str(e)}")
+                        continue
             
             # Sort by similarity and limit
-            results.sort(key=lambda x: x["similarity"], reverse=True)
-            result.data = results[:limit]
-        
-        # Get document details for results
-        results = []
-        for row in result.data:
-            doc_result = supabase.table("documents").select("title, source_url").eq("id", row["document_id"]).single().execute()
+            search_results.sort(key=lambda x: x["similarity"], reverse=True)
+            search_results = search_results[:limit]
             
-            if doc_result.data:
-                results.append(SearchResult(
-                    id=row["id"],
-                    document_id=row["document_id"],
-                    chunk_index=row["chunk_index"],
-                    content=row["content"],
-                    similarity=row["similarity"],
-                    document_title=doc_result.data["title"],
-                    document_url=doc_result.data.get("source_url")
-                ))
-        
-        return results
+            # Get document details for results
+            final_results = []
+            for row in search_results:
+                doc_result = supabase.table("documents").select("title, source_url").eq("id", row["document_id"]).single().execute()
+                
+                if doc_result.data:
+                    final_results.append(SearchResult(
+                        id=row["id"],
+                        document_id=row["document_id"],
+                        chunk_index=row["chunk_index"],
+                        content=row["content"],
+                        similarity=row["similarity"],
+                        document_title=doc_result.data["title"],
+                        document_url=doc_result.data.get("source_url")
+                    ))
+            
+            return final_results
         
     except Exception as e:
         raise Exception(f"Semantic search error: {str(e)}")
