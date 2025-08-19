@@ -40,57 +40,68 @@ class ContentProcessor:
             raise Exception(f"Failed to process text: {str(e)}")
     
     async def _fetch_url_content(self, url: str) -> str:
-        """Fetch and extract content from URL"""
+        """Fetch and extract content from URL using enhanced scraping"""
         try:
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
+            from services.web_scraper import EnhancedWebScraper
             
-            response = requests.get(url, headers=headers, timeout=30)
-            response.raise_for_status()
-            
-            # Parse HTML
-            soup = BeautifulSoup(response.content, 'html.parser')
-            
-            # Remove script and style elements
-            for script in soup(["script", "style"]):
-                script.decompose()
-            
-            # Extract text content
-            text = soup.get_text()
-            
-            # Clean up whitespace
-            lines = (line.strip() for line in text.splitlines())
-            chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
-            text = ' '.join(chunk for chunk in chunks if chunk)
-            
-            return text
-            
+            async with EnhancedWebScraper() as scraper:
+                content = await scraper.scrape_url(url)
+                
+                if not content.get('text'):
+                    raise Exception("No content extracted from URL")
+                    
+                return content['text']
+                
         except Exception as e:
             raise Exception(f"Failed to fetch URL content: {str(e)}")
     
     async def _process_content(self, content: str, source_url: Optional[str] = None) -> Dict[str, Any]:
-        """Process content using Claude AI"""
+        """Process content using Claude AI with advanced text processing"""
         try:
-            # Chunk content for processing
-            chunks = self._chunk_content(content)
+            # Initialize advanced text processor
+            from services.text_processor import AdvancedTextProcessor
+            text_processor = AdvancedTextProcessor()
             
-            # Extract title
-            title = await self._extract_title(content[:2000])  # Use first 2000 chars for title
+            # Perform advanced text analysis
+            content_analysis = await text_processor.process_text(content, source_url)
             
-            # Generate summary
-            summary = await self._generate_summary(content[:5000])  # Use first 5000 chars for summary
+            # Create enhanced chunks using advanced processing
+            enhanced_chunks = text_processor.create_enhanced_chunks(content)
             
-            # Extract insights
+            # Convert enhanced chunks to the format expected by the rest of the pipeline
+            chunks = []
+            for chunk in enhanced_chunks:
+                chunks.append({
+                    "index": chunk.index,
+                    "text": chunk.text,
+                    "start_char": chunk.start_char,
+                    "end_char": chunk.end_char,
+                    "word_count": chunk.word_count,
+                    "sentence_count": chunk.sentence_count,
+                    "quality_score": chunk.quality_score,
+                    "topics": chunk.topics or [],
+                    "key_phrases": chunk.key_phrases or []
+                })
+            
+            # Extract title using AI (enhanced with content analysis)
+            title = await self._extract_title(content[:2000])
+            
+            # Use AI-generated summary or fallback to text processor summary
+            ai_summary = await self._generate_summary(content[:5000])
+            summary = ai_summary if len(ai_summary) > 50 else content_analysis.summary
+            
+            # Extract insights using AI
             insights = await self._extract_insights(content)
             
-            # Extract tags
-            tags = await self._extract_tags(content)
+            # Combine AI tags with extracted topics
+            ai_tags = await self._extract_tags(content)
+            extracted_topics = content_analysis.topics or []
+            tags = list(set(ai_tags + extracted_topics))[:15]  # Limit to 15 tags
             
-            # Extract action items
+            # Extract action items using AI
             action_items = await self._extract_action_items(content)
             
-            # Extract quotable snippets
+            # Extract quotable snippets using AI
             quotable_snippets = await self._extract_quotable_snippets(content)
             
             return {
@@ -101,7 +112,18 @@ class ContentProcessor:
                 "action_items": action_items,
                 "quotable_snippets": quotable_snippets,
                 "chunks": chunks,
-                "source_url": source_url
+                "source_url": source_url,
+                # Enhanced metadata from text processing
+                "content_type": content_analysis.content_type.value,
+                "quality": content_analysis.quality.value,
+                "language": content_analysis.language,
+                "word_count": content_analysis.word_count,
+                "sentence_count": content_analysis.sentence_count,
+                "paragraph_count": content_analysis.paragraph_count,
+                "reading_time_minutes": content_analysis.reading_time_minutes,
+                "complexity_score": content_analysis.complexity_score,
+                "key_phrases": content_analysis.key_phrases,
+                "structure": content_analysis.structure
             }
             
         except Exception as e:

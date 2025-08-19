@@ -68,6 +68,18 @@ class DocumentResponse(BaseModel):
     processing_status: str
     created_at: datetime
     updated_at: datetime
+    
+    # Enhanced metadata from advanced text processing
+    content_type: Optional[str] = None
+    quality: Optional[str] = None
+    language: Optional[str] = None
+    word_count: Optional[int] = None
+    sentence_count: Optional[int] = None
+    paragraph_count: Optional[int] = None
+    reading_time_minutes: Optional[int] = None
+    complexity_score: Optional[float] = None
+    key_phrases: Optional[List[str]] = None
+    structure: Optional[Dict[str, Any]] = None
 
 class DocumentUpdate(BaseModel):
     """Document update request model"""

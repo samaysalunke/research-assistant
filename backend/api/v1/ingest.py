@@ -12,6 +12,7 @@ from core.config import get_settings
 from auth.middleware import get_current_user
 from models.schemas import DocumentCreate, ProcessingStatus
 from services.content_processor import ContentProcessor
+from services.processing_pipeline import EnhancedProcessingPipeline
 from database.client import get_supabase_user_client
 
 router = APIRouter(prefix="/ingest", tags=["Content Ingestion"])
@@ -110,19 +111,30 @@ async def ingest_content(
             else:
                 raise HTTPException(status_code=500, detail=f"Failed to create document record: {str(e)}")
         
-        # Start background processing
-        background_tasks.add_task(
-            process_content_background,
-            job_id=job_id,
-            content=content,
-            user_id=current_user.get('id')
-        )
-        
-        return ProcessingStatus(
-            job_id=job_id,
-            status="pending",
-            message="Content processing started"
-        )
+        # Use enhanced processing pipeline for URL content
+        if content.source_url:
+            pipeline = EnhancedProcessingPipeline()
+            task_id = await pipeline.process_url(str(content.source_url), current_user.get('id'))
+            
+            return ProcessingStatus(
+                job_id=task_id,
+                status="pending",
+                message="Content processing started with enhanced pipeline"
+            )
+        else:
+            # For text content, use the original processor
+            background_tasks.add_task(
+                process_content_background,
+                job_id=job_id,
+                content=content,
+                user_id=current_user.get('id')
+            )
+            
+            return ProcessingStatus(
+                job_id=job_id,
+                status="pending",
+                message="Content processing started"
+            )
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to start processing: {str(e)}")
@@ -136,7 +148,21 @@ async def get_processing_status(
     Get the processing status of a content ingestion job
     """
     try:
-        # Use service client since we're filtering by user_id for security
+        # First try enhanced pipeline status
+        pipeline = EnhancedProcessingPipeline()
+        enhanced_status = await pipeline.get_task_status(job_id)
+        
+        if "error" not in enhanced_status:
+            # Return enhanced status
+            return ProcessingStatus(
+                job_id=enhanced_status.get("task_id", job_id),
+                status=enhanced_status.get("status", "unknown"),
+                progress=enhanced_status.get("progress", 0.0),
+                message=f"Stage: {enhanced_status.get('stage', 'unknown')}",
+                result=enhanced_status.get("result")
+            )
+        
+        # Fallback to original document status
         from database.client import get_supabase_service_client
         supabase = get_supabase_service_client()
         

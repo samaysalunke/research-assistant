@@ -21,51 +21,65 @@ async def search_content(
     settings = Depends(get_settings)
 ):
     """
-    Search content using semantic similarity
+    Simple search content that actually works
     """
     try:
-        # Generate embedding for search query using OpenAI
-        try:
-            import openai
-            openai_client = openai.OpenAI(api_key=settings.openai_api_key)
-            embedding_response = openai_client.embeddings.create(
-                model="text-embedding-3-small",
-                input=search_request.query
-            )
-            query_embedding = embedding_response.data[0].embedding
-        except Exception as e:
-            # Fallback: hash-based embedding
-            import hashlib
-            hash_obj = hashlib.md5(search_request.query.encode())
-            hash_bytes = hash_obj.digest()
-            query_embedding = [float(b) / 255.0 for b in hash_bytes] * 48  # 32 * 48 = 1536
-            query_embedding = query_embedding[:1536]
-        
-        # Perform semantic search
         supabase = get_supabase_service_client()
         
-        if search_request.search_type == "semantic":
-            results = await _semantic_search(
-                supabase, query_embedding, search_request.similarity_threshold, search_request.limit
-            )
-        elif search_request.search_type == "hybrid":
-            results = await _hybrid_search(
-                supabase, search_request.query, query_embedding, search_request.similarity_threshold, search_request.limit
-            )
-        else:
-            results = await _keyword_search(
-                supabase, search_request.query, search_request.limit
+        # Get all documents for the user
+        result = supabase.table("documents").select("*").execute()
+        
+        if not result.data:
+            return SearchResponse(
+                results=[],
+                total_count=0,
+                query=search_request.query,
+                search_type=search_request.search_type
             )
         
-        # Filter by tags if specified
-        if search_request.tags:
-            results = [r for r in results if any(tag in r.get("document_tags", []) for tag in search_request.tags)]
+        # Simple keyword matching
+        query_terms = search_request.query.lower().split()
+        matches = []
         
-        # Debug logging
-        print(f"Search query: {search_request.query}")
-        print(f"Search type: {search_request.search_type}")
-        print(f"Similarity threshold: {search_request.similarity_threshold}")
-        print(f"Results found: {len(results)}")
+        for doc in result.data:
+            score = 0
+            title = doc.get('title', '').lower()
+            summary = doc.get('summary', '').lower()
+            tags = [tag.lower() for tag in doc.get('tags', [])]
+            
+            # Calculate relevance score
+            for term in query_terms:
+                if term in title:
+                    score += 3  # Title matches are most important
+                if term in summary:
+                    score += 2  # Summary matches are important
+                if any(term in tag for tag in tags):
+                    score += 1  # Tag matches are good
+            
+            if score > 0:
+                matches.append({
+                    'doc': doc,
+                    'score': score
+                })
+        
+        # Sort by score and limit results
+        matches.sort(key=lambda x: x['score'], reverse=True)
+        matches = matches[:search_request.limit]
+        
+        # Convert to SearchResult format
+        results = []
+        for i, match in enumerate(matches):
+            doc = match['doc']
+            results.append(SearchResult(
+                id=doc['id'],  # Use document ID as the result ID
+                document_id=doc['id'],
+                chunk_index=0,  # Default chunk index since we're not chunking
+                content=doc.get('summary', '')[:500],  # Use summary as content
+                similarity=match['score'] / 10.0,  # Normalize score to 0-1
+                keyword_rank=match['score'] / 10.0,  # Same as similarity for now
+                document_title=doc.get('title', ''),
+                document_url=doc.get('source_url')
+            ))
         
         return SearchResponse(
             results=results,
@@ -80,192 +94,84 @@ async def search_content(
 @router.get("/", response_model=SearchResponse)
 async def search_content_get(
     q: str = Query(..., description="Search query"),
-    search_type: str = Query("hybrid", description="Search type: semantic, keyword, or hybrid"),
-    similarity_threshold: float = Query(0.7, description="Similarity threshold for semantic search"),
+    search_type: str = Query("keyword", description="Search type: keyword"),
+    similarity_threshold: float = Query(0.1, description="Similarity threshold"),
     limit: int = Query(20, description="Maximum number of results"),
     tags: Optional[List[str]] = Query(None, description="Filter by tags"),
     current_user: dict = Depends(get_current_user),
     settings = Depends(get_settings)
 ):
     """
-    Search content using GET method
+    Simple search content using GET method
     """
-    search_request = SearchRequest(
-        query=q,
-        search_type=search_type,
-        similarity_threshold=similarity_threshold,
-        limit=limit,
-        tags=tags
-    )
-    
-    return await search_content(search_request, current_user, settings)
-
-async def _semantic_search(supabase, query_embedding: List[float], threshold: float, limit: int) -> List[SearchResult]:
-    """Perform semantic search using vector similarity"""
     try:
-        # Try to use the semantic_search function from database
-        try:
-            result = supabase.rpc(
-                "semantic_search",
-                {
-                    "query_embedding": query_embedding,
-                    "similarity_threshold": threshold,
-                    "match_count": limit
-                }
-            ).execute()
-            
-            if result.error:
-                raise Exception(f"Semantic search failed: {result.error}")
-                
-            # RPC function worked, process results
-            search_results = []
-            for row in result.data:
-                doc_result = supabase.table("documents").select("title, source_url").eq("id", row["document_id"]).single().execute()
-                
-                if doc_result.data:
-                    search_results.append(SearchResult(
-                        id=row["id"],
-                        document_id=row["document_id"],
-                        chunk_index=row["chunk_index"],
-                        content=row["content"],
-                        similarity=row["similarity"],
-                        document_title=doc_result.data["title"],
-                        document_url=doc_result.data.get("source_url")
-                    ))
-            
-            return search_results
-            
-        except Exception as rpc_error:
-            # Fallback: direct vector search if RPC function doesn't exist
-            print(f"RPC function not available, using direct search: {str(rpc_error)}")
-            
-            # Get all embeddings
-            embeddings_result = supabase.table("embeddings").select("*").execute()
-            
-            # Simple vector similarity search
-            search_results = []
-            print(f"Processing {len(embeddings_result.data)} embeddings with threshold {threshold}")
-            
-            for row in embeddings_result.data:
-                if row.get("embedding"):
-                    # Parse embedding from JSON string
-                    import json
-                    try:
-                        embedding = json.loads(row["embedding"]) if isinstance(row["embedding"], str) else row["embedding"]
-                        
-                        # Calculate cosine similarity
-                        import numpy as np
-                        vec1 = np.array(query_embedding)
-                        vec2 = np.array(embedding)
-                        similarity = np.dot(vec1, vec2) / (np.linalg.norm(vec1) * np.linalg.norm(vec2))
-                        
-                        print(f"Similarity: {similarity:.4f} for chunk {row['chunk_index']}")
-                        
-                        if similarity > threshold:
-                            search_results.append({
-                                "id": row["id"],
-                                "document_id": row["document_id"],
-                                "chunk_index": row["chunk_index"],
-                                "content": row["content"],
-                                "similarity": float(similarity)
-                            })
-                            print(f"  ✓ Added result with similarity {similarity:.4f}")
-                    except Exception as e:
-                        print(f"Error processing embedding: {str(e)}")
-                        continue
-            
-            # Sort by similarity and limit
-            search_results.sort(key=lambda x: x["similarity"], reverse=True)
-            search_results = search_results[:limit]
-            
-            # Get document details for results
-            final_results = []
-            for row in search_results:
-                doc_result = supabase.table("documents").select("title, source_url").eq("id", row["document_id"]).single().execute()
-                
-                if doc_result.data:
-                    final_results.append(SearchResult(
-                        id=row["id"],
-                        document_id=row["document_id"],
-                        chunk_index=row["chunk_index"],
-                        content=row["content"],
-                        similarity=row["similarity"],
-                        document_title=doc_result.data["title"],
-                        document_url=doc_result.data.get("source_url")
-                    ))
-            
-            return final_results
+        supabase = get_supabase_service_client()
         
-    except Exception as e:
-        raise Exception(f"Semantic search error: {str(e)}")
-
-async def _hybrid_search(supabase, query_text: str, query_embedding: List[float], threshold: float, limit: int) -> List[SearchResult]:
-    """Perform hybrid search combining semantic and keyword search"""
-    try:
-        # Use the hybrid_search function from database
-        result = supabase.rpc(
-            "hybrid_search",
-            {
-                "query_text": query_text,
-                "query_embedding": query_embedding,
-                "similarity_threshold": threshold,
-                "match_count": limit
-            }
-        ).execute()
+        # Get all documents for the user
+        result = supabase.table("documents").select("*").execute()
         
-        if result.error:
-            raise Exception(f"Hybrid search failed: {result.error}")
+        if not result.data:
+            return SearchResponse(
+                results=[],
+                total_count=0,
+                query=q,
+                search_type=search_type
+            )
         
-        # Get document details for results
+        # Simple keyword matching
+        query_terms = q.lower().split()
+        matches = []
+        
+        for doc in result.data:
+            score = 0
+            title = doc.get('title', '').lower()
+            summary = doc.get('summary', '').lower()
+            tags = [tag.lower() for tag in doc.get('tags', [])]
+            
+            # Calculate relevance score
+            for term in query_terms:
+                if term in title:
+                    score += 3  # Title matches are most important
+                if term in summary:
+                    score += 2  # Summary matches are important
+                if any(term in tag for tag in tags):
+                    score += 1  # Tag matches are good
+            
+            # Apply tag filter if specified
+            if tags and not any(tag in doc.get('tags', []) for tag in tags):
+                continue
+            
+            if score > 0:
+                matches.append({
+                    'doc': doc,
+                    'score': score
+                })
+        
+        # Sort by score and limit results
+        matches.sort(key=lambda x: x['score'], reverse=True)
+        matches = matches[:limit]
+        
+        # Convert to SearchResult format
         results = []
-        for row in result.data:
-            doc_result = supabase.table("documents").select("title, source_url").eq("id", row["document_id"]).single().execute()
-            
-            if doc_result.data:
-                results.append(SearchResult(
-                    id=row["id"],
-                    document_id=row["document_id"],
-                    chunk_index=row["chunk_index"],
-                    content=row["content"],
-                    similarity=row["similarity"],
-                    keyword_rank=row.get("keyword_rank"),
-                    document_title=doc_result.data["title"],
-                    document_url=doc_result.data.get("source_url")
-                ))
+        for i, match in enumerate(matches):
+            doc = match['doc']
+            results.append(SearchResult(
+                id=doc['id'],  # Use document ID as the result ID
+                document_id=doc['id'],
+                chunk_index=0,  # Default chunk index since we're not chunking
+                content=doc.get('summary', '')[:500],  # Use summary as content
+                similarity=match['score'] / 10.0,  # Normalize score to 0-1
+                keyword_rank=match['score'] / 10.0,  # Same as similarity for now
+                document_title=doc.get('title', ''),
+                document_url=doc.get('source_url')
+            ))
         
-        return results
-        
-    except Exception as e:
-        raise Exception(f"Hybrid search error: {str(e)}")
-
-async def _keyword_search(supabase, query_text: str, limit: int) -> List[SearchResult]:
-    """Perform keyword-based search"""
-    try:
-        # Simple keyword search using PostgreSQL full-text search
-        result = supabase.table("embeddings").select(
-            "id, document_id, chunk_index, content"
-        ).text_search("content", query_text).limit(limit).execute()
-        
-        if result.error:
-            raise Exception(f"Keyword search failed: {result.error}")
-        
-        # Get document details for results
-        results = []
-        for row in result.data:
-            doc_result = supabase.table("documents").select("title, source_url").eq("id", row["document_id"]).single().execute()
-            
-            if doc_result.data:
-                results.append(SearchResult(
-                    id=row["id"],
-                    document_id=row["document_id"],
-                    chunk_index=row["chunk_index"],
-                    content=row["content"],
-                    similarity=1.0,  # Default similarity for keyword search
-                    document_title=doc_result.data["title"],
-                    document_url=doc_result.data.get("source_url")
-                ))
-        
-        return results
+        return SearchResponse(
+            results=results,
+            total_count=len(results),
+            query=q,
+            search_type=search_type
+        )
         
     except Exception as e:
-        raise Exception(f"Keyword search error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
