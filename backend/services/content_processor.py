@@ -281,6 +281,7 @@ Return as JSON array:
         try:
             # Use OpenAI embeddings (Anthropic doesn't provide embeddings)
             import openai
+            # Create client without any extra arguments
             openai_client = openai.OpenAI(api_key=self.settings.openai_api_key)
             response = openai_client.embeddings.create(
                 model="text-embedding-3-small",  # Use small model for cost efficiency
@@ -293,6 +294,6 @@ Return as JSON array:
             import hashlib
             hash_obj = hashlib.md5(text.encode())
             hash_bytes = hash_obj.digest()
-            # Convert to list of floats (1536 dimensions for text-embedding-3-small)
+            # Convert to list of floats (1536 dimensions)
             embedding = [float(b) / 255.0 for b in hash_bytes] * 48  # 32 * 48 = 1536
             return embedding[:1536]

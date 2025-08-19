@@ -115,27 +115,32 @@ async def _semantic_search(supabase, query_embedding: List[float], threshold: fl
             print(f"RPC function not available, using direct search: {str(rpc_error)}")
             result = supabase.table("embeddings").select("*").execute()
             
-            # Simple vector similarity search
-            results = []
-            for row in result.data:
-                if row.get("embedding"):
-                    # Calculate cosine similarity (simplified)
+                    # Simple vector similarity search
+        results = []
+        for row in result.data:
+            if row.get("embedding"):
+                # Parse embedding from JSON string
+                import json
+                try:
+                    embedding = json.loads(row["embedding"]) if isinstance(row["embedding"], str) else row["embedding"]
+                    
+                    # Calculate cosine similarity
                     import numpy as np
-                    try:
-                        vec1 = np.array(query_embedding)
-                        vec2 = np.array(row["embedding"])
-                        similarity = np.dot(vec1, vec2) / (np.linalg.norm(vec1) * np.linalg.norm(vec2))
-                        
-                        if similarity > threshold:
-                            results.append({
-                                "id": row["id"],
-                                "document_id": row["document_id"],
-                                "chunk_index": row["chunk_index"],
-                                "content": row["content"],
-                                "similarity": float(similarity)
-                            })
-                    except:
-                        continue
+                    vec1 = np.array(query_embedding)
+                    vec2 = np.array(embedding)
+                    similarity = np.dot(vec1, vec2) / (np.linalg.norm(vec1) * np.linalg.norm(vec2))
+                    
+                    if similarity > threshold:
+                        results.append({
+                            "id": row["id"],
+                            "document_id": row["document_id"],
+                            "chunk_index": row["chunk_index"],
+                            "content": row["content"],
+                            "similarity": float(similarity)
+                        })
+                except Exception as e:
+                    print(f"Error processing embedding: {str(e)}")
+                    continue
             
             # Sort by similarity and limit
             results.sort(key=lambda x: x["similarity"], reverse=True)
