@@ -61,6 +61,12 @@ async def search_content(
         if search_request.tags:
             results = [r for r in results if any(tag in r.get("document_tags", []) for tag in search_request.tags)]
         
+        # Debug logging
+        print(f"Search query: {search_request.query}")
+        print(f"Search type: {search_request.search_type}")
+        print(f"Similarity threshold: {search_request.similarity_threshold}")
+        print(f"Results found: {len(results)}")
+        
         return SearchResponse(
             results=results,
             total_count=len(results),
@@ -138,6 +144,8 @@ async def _semantic_search(supabase, query_embedding: List[float], threshold: fl
             
             # Simple vector similarity search
             search_results = []
+            print(f"Processing {len(embeddings_result.data)} embeddings with threshold {threshold}")
+            
             for row in embeddings_result.data:
                 if row.get("embedding"):
                     # Parse embedding from JSON string
@@ -151,6 +159,8 @@ async def _semantic_search(supabase, query_embedding: List[float], threshold: fl
                         vec2 = np.array(embedding)
                         similarity = np.dot(vec1, vec2) / (np.linalg.norm(vec1) * np.linalg.norm(vec2))
                         
+                        print(f"Similarity: {similarity:.4f} for chunk {row['chunk_index']}")
+                        
                         if similarity > threshold:
                             search_results.append({
                                 "id": row["id"],
@@ -159,6 +169,7 @@ async def _semantic_search(supabase, query_embedding: List[float], threshold: fl
                                 "content": row["content"],
                                 "similarity": float(similarity)
                             })
+                            print(f"  ✓ Added result with similarity {similarity:.4f}")
                     except Exception as e:
                         print(f"Error processing embedding: {str(e)}")
                         continue

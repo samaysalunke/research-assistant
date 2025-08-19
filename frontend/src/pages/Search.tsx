@@ -39,6 +39,7 @@ const Search: React.FC = () => {
           query: query,
           search_type: searchType,
           limit: 10,
+          similarity_threshold: 0.5, // Lower threshold to get more results
         }),
       });
 
@@ -50,7 +51,7 @@ const Search: React.FC = () => {
       setResults(data.results || []);
       
       if (data.results?.length === 0) {
-        toast.info('No results found. Try a different query.');
+        toast('No results found. Try a different query.', { icon: '🔍' });
       }
     } catch (error: any) {
       toast.error(error.message || 'Search failed');
