@@ -9,8 +9,23 @@ from typing import Dict, Any, Optional, List
 from urllib.parse import urlparse
 import logging
 
-from playwright.async_api import async_playwright, Browser, Page
-from newspaper import Article, Config
+# Try to import optional dependencies
+try:
+    from playwright.async_api import async_playwright, Browser, Page
+    PLAYWRIGHT_AVAILABLE = True
+except ImportError:
+    PLAYWRIGHT_AVAILABLE = False
+    logger = logging.getLogger(__name__)
+    logger.warning("Playwright not available, using fallback scraping methods")
+
+try:
+    from newspaper import Article, Config
+    NEWSPAPER_AVAILABLE = True
+except ImportError:
+    NEWSPAPER_AVAILABLE = False
+    logger = logging.getLogger(__name__)
+    logger.warning("Newspaper3k not available, using fallback scraping methods")
+
 from bs4 import BeautifulSoup
 import requests
 
@@ -28,7 +43,8 @@ class EnhancedWebScraper:
         
     async def __aenter__(self):
         """Async context manager entry"""
-        await self._init_browser()
+        if PLAYWRIGHT_AVAILABLE:
+            await self._init_browser()
         return self
         
     async def __aexit__(self, exc_type, exc_val, exc_tb):
@@ -37,6 +53,9 @@ class EnhancedWebScraper:
         
     async def _init_browser(self):
         """Initialize Playwright browser"""
+        if not PLAYWRIGHT_AVAILABLE:
+            return
+            
         try:
             self.playwright = await async_playwright().start()
             self.browser = await self.playwright.chromium.launch(
@@ -66,6 +85,9 @@ class EnhancedWebScraper:
             
     async def _cleanup(self):
         """Clean up browser resources"""
+        if not PLAYWRIGHT_AVAILABLE:
+            return
+            
         try:
             if self.page:
                 await self.page.close()
@@ -83,17 +105,18 @@ class EnhancedWebScraper:
             logger.info(f"Starting enhanced scraping for: {url}")
             
             # Try newspaper3k first (better for articles)
-            if self._is_article_url(url):
+            if NEWSPAPER_AVAILABLE and self._is_article_url(url):
                 content = await self._scrape_with_newspaper(url)
                 if content and content.get('text'):
                     logger.info("Successfully scraped with newspaper3k")
                     return content
                     
             # Fallback to Playwright for dynamic content
-            content = await self._scrape_with_playwright(url)
-            if content and content.get('text'):
-                logger.info("Successfully scraped with Playwright")
-                return content
+            if PLAYWRIGHT_AVAILABLE:
+                content = await self._scrape_with_playwright(url)
+                if content and content.get('text'):
+                    logger.info("Successfully scraped with Playwright")
+                    return content
                 
             # Final fallback to basic requests
             content = await self._scrape_with_requests(url)
@@ -117,6 +140,9 @@ class EnhancedWebScraper:
         
     async def _scrape_with_newspaper(self, url: str) -> Dict[str, Any]:
         """Scrape using newspaper3k library"""
+        if not NEWSPAPER_AVAILABLE:
+            return {}
+            
         try:
             config = Config()
             config.browser_user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
@@ -147,6 +173,9 @@ class EnhancedWebScraper:
         
     async def _scrape_with_playwright(self, url: str) -> Dict[str, Any]:
         """Scrape using Playwright for dynamic content"""
+        if not PLAYWRIGHT_AVAILABLE:
+            return {}
+            
         try:
             # Navigate to page
             await self.page.goto(url, wait_until='networkidle', timeout=30000)
@@ -173,6 +202,9 @@ class EnhancedWebScraper:
         
     async def _scroll_page(self):
         """Scroll page to load lazy content"""
+        if not PLAYWRIGHT_AVAILABLE:
+            return
+            
         try:
             # Scroll to bottom
             await self.page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
@@ -187,6 +219,9 @@ class EnhancedWebScraper:
             
     async def _extract_content_from_page(self) -> Dict[str, str]:
         """Extract content from Playwright page"""
+        if not PLAYWRIGHT_AVAILABLE:
+            return {'text': '', 'title': ''}
+            
         try:
             # Extract title
             title = await self.page.title()

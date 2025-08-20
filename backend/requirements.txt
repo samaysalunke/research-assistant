@@ -16,18 +16,14 @@ numpy==1.24.3
 # Web Scraping & Content Processing
 beautifulsoup4==4.12.2
 requests==2.31.0
-playwright==1.40.0
-newspaper3k==0.2.8
 lxml==4.9.3
-lxml-html-clean==1.0.0
 
 # PDF Processing
 PyPDF2==3.0.1
 python-multipart==0.0.20
 
-# Advanced Text Processing
+# Text Processing
 langdetect==1.0.9
-nltk==3.8.1
 
 # HTTP Client
 httpx==0.26.0
@@ -38,6 +34,3 @@ passlib[bcrypt]==1.7.4
 
 # Utilities
 python-dotenv==1.0.0
-
-# Additional dependencies for production
-gunicorn==21.2.0

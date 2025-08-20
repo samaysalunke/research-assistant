@@ -40,17 +40,31 @@ class ContentProcessor:
             raise Exception(f"Failed to process text: {str(e)}")
     
     async def _fetch_url_content(self, url: str) -> str:
-        """Fetch and extract content from URL using enhanced scraping"""
+        """Fetch and extract content from URL using enhanced scraping with fallback"""
         try:
-            from services.web_scraper import EnhancedWebScraper
-            
-            async with EnhancedWebScraper() as scraper:
-                content = await scraper.scrape_url(url)
+            # Try enhanced scraper first
+            try:
+                from services.web_scraper import EnhancedWebScraper
                 
-                if not content.get('text'):
-                    raise Exception("No content extracted from URL")
+                async with EnhancedWebScraper() as scraper:
+                    content = await scraper.scrape_url(url)
                     
-                return content['text']
+                    if content.get('text'):
+                        return content['text']
+                        
+            except ImportError:
+                pass  # Enhanced scraper not available
+            
+            # Fallback to simple scraper
+            from services.simple_scraper import SimpleWebScraper
+            
+            scraper = SimpleWebScraper()
+            content = await scraper.scrape_url(url)
+            
+            if not content.get('text'):
+                raise Exception("No content extracted from URL")
+                
+            return content['text']
                 
         except Exception as e:
             raise Exception(f"Failed to fetch URL content: {str(e)}")
