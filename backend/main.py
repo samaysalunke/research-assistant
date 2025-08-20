@@ -94,6 +94,33 @@ async def catch_all(full_path: str):
     
     raise HTTPException(status_code=404, detail="Not found")
 
+# Startup and shutdown events
+@app.on_event("startup")
+async def startup_event():
+    """Log application startup"""
+    import logging
+    import sys
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
+    
+    logger.info("=== Research Assistant API Starting ===")
+    logger.info(f"Environment: {os.getenv('ENVIRONMENT', 'unknown')}")
+    logger.info(f"Python version: {sys.version}")
+    logger.info(f"Working directory: {os.getcwd()}")
+    logger.info(f"Frontend path exists: {frontend_path.exists()}")
+    logger.info(f"API Host: {settings.api_host}")
+    logger.info(f"API Port: {settings.api_port}")
+    logger.info(f"Debug mode: {settings.debug}")
+    logger.info(f"CORS origins: {settings.cors_origins}")
+    logger.info("=== Startup Complete ===")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Log application shutdown"""
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info("=== Research Assistant API Shutting Down ===")
+
 # Include API routers
 app.include_router(ingest.router, prefix="/api/v1")
 app.include_router(search.router, prefix="/api/v1")
