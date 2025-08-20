@@ -4,9 +4,9 @@ A comprehensive guide for deploying the Research-to-Insights Agent to production
 
 ## 🚀 Quick Deployment Options
 
-### **Option 1: Railway (Recommended)**
+### **Option 1: Vercel (Recommended)**
 
-Railway provides the easiest deployment experience with automatic scaling.
+Vercel provides the best deployment experience for full-stack applications with serverless functions.
 
 #### **Backend Deployment**
 1. **Connect Repository**

@@ -116,19 +116,24 @@ A powerful AI-driven research assistant that transforms digital content into str
 
 ## 🚀 Deployment
 
-### **Quick Deploy to Railway**
+### **Quick Deploy to Vercel** (Recommended)
 
-The easiest way to deploy this application is using Railway:
+The easiest way to deploy this application is using Vercel:
 
 1. **Fork this repository** to your GitHub account
-2. **Sign up for Railway** at [railway.app](https://railway.app)
-3. **Create a new project** and connect your GitHub repository
-4. **Configure environment variables** (see `RAILWAY_DEPLOYMENT.md`)
-5. **Deploy!** Railway will automatically build and deploy your app
+2. **Sign up for Vercel** at [vercel.com](https://vercel.com)
+3. **Import your GitHub repository** in Vercel dashboard
+4. **Configure environment variables** (see below)
+5. **Deploy!** Vercel will automatically build and deploy your app
 
-### **Manual Deployment**
+#### **Deployment Structure**
+- **Frontend**: Static React app served from Vercel's global CDN
+- **Backend**: Serverless functions in the `/api` directory
+- **Database**: Supabase (PostgreSQL with vector extensions)
 
-For other platforms, see the detailed deployment guide in `RAILWAY_DEPLOYMENT.md`.
+### **Alternative Deployment Options**
+
+For other platforms like Railway, Render, or custom servers, you can adapt the configuration as needed.
 
 ### **Environment Variables**
 
