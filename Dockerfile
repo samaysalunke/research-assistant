@@ -24,8 +24,8 @@ COPY backend/requirements.txt ./backend/
 # Install Python dependencies
 RUN pip install --no-cache-dir -r backend/requirements.txt
 
-# Install Node.js dependencies
-RUN cd frontend && npm ci --only=production
+# Install Node.js dependencies (including dev dependencies for build)
+RUN cd frontend && npm ci
 
 # Copy application code
 COPY . .
