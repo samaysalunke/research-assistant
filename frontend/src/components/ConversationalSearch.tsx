@@ -1,230 +1,227 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, MessageSquare, Send, Sparkles, FileText, List, BookOpen, Zap } from 'lucide-react';
-import { supabase } from '@/services/supabase';
-import toast from 'react-hot-toast';
+import { Progress } from '@/components/ui/progress';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { MessageCircle, Send, History, Sparkles, Loader2, X, RefreshCw } from 'lucide-react';
 
 interface ConversationMessage {
   id: string;
-  userMessage: string;
-  aiResponse: string;
+  query: string;
+  response: string;
   timestamp: string;
-  confidence: number;
-  sources: Array<{
+  sources?: Array<{
+    id: string;
     title: string;
-    url: string;
-    relevance: number;
-    content_preview: string;
+    url?: string;
   }>;
+  confidence?: number;
 }
 
 interface ConversationSession {
   session_id: string;
+  user_id: string;
   created_at: string;
   last_activity: string;
+  title?: string;
   message_count: number;
-  conversation_summary?: string;
 }
 
-export default function ConversationalSearch() {
+interface ConversationalResponse {
+  response: string;
+  conversation_id: string;
+  sources: Array<{
+    id: string;
+    title: string;
+    url?: string;
+  }>;
+  confidence: number;
+  suggestions: string[];
+  response_type: string;
+  metadata: any;
+  query_analysis: any;
+}
+
+const ConversationalSearch: React.FC = () => {
   const [query, setQuery] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [currentSession, setCurrentSession] = useState<ConversationSession | null>(null);
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
-  const [responseType, setResponseType] = useState('comprehensive');
+  const [currentSession, setCurrentSession] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   const [sessions, setSessions] = useState<ConversationSession[]>([]);
   const [showSessions, setShowSessions] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  const responseTypes = [
-    { value: 'comprehensive', label: 'Comprehensive', icon: BookOpen },
-    { value: 'summary', label: 'Summary', icon: FileText },
-    { value: 'detailed', label: 'Detailed', icon: Zap },
-    { value: 'bullet_points', label: 'Bullet Points', icon: List },
-  ];
+  const [responseType, setResponseType] = useState('comprehensive');
+  const [progress, setProgress] = useState(0);
 
   useEffect(() => {
     loadSessions();
   }, []);
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
   const loadSessions = async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
-
       const response = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/conversation/sessions`, {
         headers: {
-          'Authorization': `Bearer ${session.access_token}`,
+          'Authorization': `Bearer ${localStorage.getItem('supabase.auth.token')}`,
+          'Content-Type': 'application/json',
         },
       });
-
+      
       if (response.ok) {
-        const sessionsData = await response.json();
-        setSessions(sessionsData);
+        const data = await response.json();
+        setSessions(data.sessions || []);
       }
     } catch (error) {
-      console.error('Error loading sessions:', error);
+      console.error('Failed to load sessions:', error);
     }
   };
 
   const startNewConversation = async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
-
       const response = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/conversation/start`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${session.access_token}`,
+          'Authorization': `Bearer ${localStorage.getItem('supabase.auth.token')}`,
           'Content-Type': 'application/json',
         },
       });
-
+      
       if (response.ok) {
-        const sessionData = await response.json();
-        setCurrentSession(sessionData);
+        const data = await response.json();
+        setCurrentSession(data.conversation_id);
         setMessages([]);
-        setShowSessions(false);
-        toast.success('New conversation started!');
+        await loadSessions();
       }
     } catch (error) {
-      console.error('Error starting conversation:', error);
-      toast.error('Failed to start conversation');
+      console.error('Failed to start conversation:', error);
     }
   };
 
   const sendMessage = async () => {
     if (!query.trim() || isLoading) return;
 
-    const userMessage = query.trim();
-    setQuery('');
-    setIsLoading(true);
-
-    // Add user message to UI immediately
-    const tempMessage: ConversationMessage = {
+    const userMessage: ConversationMessage = {
       id: Date.now().toString(),
-      userMessage,
-      aiResponse: '',
+      query: query,
+      response: '',
       timestamp: new Date().toISOString(),
-      confidence: 0,
-      sources: [],
     };
 
-    setMessages(prev => [...prev, tempMessage]);
+    setMessages(prev => [...prev, userMessage]);
+    setQuery('');
+    setIsLoading(true);
+    setProgress(0);
+
+    // Simulate progress
+    const progressInterval = setInterval(() => {
+      setProgress(prev => Math.min(prev + 10, 90));
+    }, 200);
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
-
       const response = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/conversation/query`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${session.access_token}`,
+          'Authorization': `Bearer ${localStorage.getItem('supabase.auth.token')}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          query: userMessage,
-          conversation_id: currentSession?.session_id,
+          query: userMessage.query,
+          conversation_id: currentSession,
           response_type: responseType,
           include_sources: true,
           max_sources: 5,
         }),
       });
 
+      clearInterval(progressInterval);
+      setProgress(100);
+
       if (response.ok) {
-        const data = await response.json();
+        const data: ConversationalResponse = await response.json();
         
-        // Update the message with AI response
+        const aiMessage: ConversationMessage = {
+          id: (Date.now() + 1).toString(),
+          query: '',
+          response: data.response,
+          timestamp: new Date().toISOString(),
+          sources: data.sources,
+          confidence: data.confidence,
+        };
+
         setMessages(prev => prev.map(msg => 
-          msg.id === tempMessage.id 
-            ? {
-                ...msg,
-                aiResponse: data.response,
-                confidence: data.confidence,
-                sources: data.sources || [],
-              }
-            : msg
-        ));
+          msg.id === userMessage.id ? { ...msg, response: data.response } : msg
+        ).concat(aiMessage));
 
-        // Update current session
-        if (data.conversation_id && !currentSession) {
-          setCurrentSession({
-            session_id: data.conversation_id,
-            created_at: new Date().toISOString(),
-            last_activity: new Date().toISOString(),
-            message_count: 1,
-          });
+        if (!currentSession) {
+          setCurrentSession(data.conversation_id);
         }
-
-        toast.success('Response received!');
       } else {
         throw new Error('Failed to get response');
       }
     } catch (error) {
-      console.error('Error sending message:', error);
-      toast.error('Failed to send message');
-      
-      // Remove the temporary message on error
-      setMessages(prev => prev.filter(msg => msg.id !== tempMessage.id));
+      console.error('Failed to send message:', error);
+      setMessages(prev => prev.map(msg => 
+        msg.id === userMessage.id ? { ...msg, response: 'Sorry, I encountered an error. Please try again.' } : msg
+      ));
     } finally {
       setIsLoading(false);
+      setProgress(0);
     }
   };
 
   const loadSession = async (sessionId: string) => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
-
-      // Get session details
       const sessionResponse = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/conversation/sessions/${sessionId}`, {
         headers: {
-          'Authorization': `Bearer ${session.access_token}`,
+          'Authorization': `Bearer ${localStorage.getItem('supabase.auth.token')}`,
+          'Content-Type': 'application/json',
         },
       });
-
-      if (sessionResponse.ok) {
-        const sessionData = await sessionResponse.json();
-        setCurrentSession(sessionData);
-      }
-
-      // Get messages
+      
       const messagesResponse = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/conversation/sessions/${sessionId}/messages`, {
         headers: {
-          'Authorization': `Bearer ${session.access_token}`,
+          'Authorization': `Bearer ${localStorage.getItem('supabase.auth.token')}`,
+          'Content-Type': 'application/json',
         },
       });
-
-      if (messagesResponse.ok) {
+      
+      if (sessionResponse.ok && messagesResponse.ok) {
+        const sessionData = await sessionResponse.json();
         const messagesData = await messagesResponse.json();
-        setMessages(messagesData);
+        
+        setCurrentSession(sessionId);
+        setMessages(messagesData.messages || []);
       }
-
-      setShowSessions(false);
     } catch (error) {
-      console.error('Error loading session:', error);
-      toast.error('Failed to load conversation');
+      console.error('Failed to load session:', error);
     }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
+  const deleteSession = async (sessionId: string) => {
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/conversation/sessions/${sessionId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('supabase.auth.token')}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (response.ok) {
+        await loadSessions();
+        if (currentSession === sessionId) {
+          setCurrentSession(null);
+          setMessages([]);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to delete session:', error);
     }
+  };
+
+  const formatTimestamp = (timestamp: string) => {
+    return new Date(timestamp).toLocaleString();
   };
 
   return (
@@ -232,20 +229,20 @@ export default function ConversationalSearch() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
-          <MessageSquare className="h-8 w-8 text-blue-600" />
+          <MessageCircle className="h-8 w-8 text-blue-600" />
           <div>
             <h1 className="text-2xl font-bold">Conversational Search</h1>
             <p className="text-gray-600">Ask questions and get AI-powered responses from your documents</p>
           </div>
         </div>
-        <div className="flex items-center space-x-2">
+        <div className="flex space-x-2">
           <Button
             variant="outline"
             onClick={() => setShowSessions(!showSessions)}
             className="flex items-center space-x-2"
           >
-            <FileText className="h-4 w-4" />
-            <span>History</span>
+            <History className="h-4 w-4" />
+            <span>Sessions</span>
           </Button>
           <Button
             onClick={startNewConversation}
@@ -263,22 +260,17 @@ export default function ConversationalSearch() {
           <CardTitle className="text-lg">Response Type</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {responseTypes.map((type) => {
-              const Icon = type.icon;
-              return (
-                <Button
-                  key={type.value}
-                  variant={responseType === type.value ? "default" : "outline"}
-                  onClick={() => setResponseType(type.value)}
-                  className="flex items-center space-x-2 h-auto p-3"
-                >
-                  <Icon className="h-4 w-4" />
-                  <span className="text-sm">{type.label}</span>
-                </Button>
-              );
-            })}
-          </div>
+          <Select value={responseType} onValueChange={setResponseType}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select response type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="comprehensive">Comprehensive</SelectItem>
+              <SelectItem value="concise">Concise</SelectItem>
+              <SelectItem value="detailed">Detailed</SelectItem>
+              <SelectItem value="summary">Summary</SelectItem>
+            </SelectContent>
+          </Select>
         </CardContent>
       </Card>
 
@@ -286,34 +278,42 @@ export default function ConversationalSearch() {
       {showSessions && (
         <Card>
           <CardHeader>
-            <CardTitle>Conversation History</CardTitle>
+            <CardTitle className="text-lg">Previous Conversations</CardTitle>
           </CardHeader>
           <CardContent>
             <ScrollArea className="h-64">
               <div className="space-y-2">
-                {sessions.length === 0 ? (
-                  <p className="text-gray-500 text-center py-4">No previous conversations</p>
-                ) : (
-                  sessions.map((session) => (
-                    <div
-                      key={session.session_id}
-                      onClick={() => loadSession(session.session_id)}
-                      className="p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-medium">
-                            {session.conversation_summary || `Conversation ${session.session_id.slice(0, 8)}`}
-                          </p>
-                          <p className="text-sm text-gray-500">
-                            {new Date(session.last_activity).toLocaleDateString()}
-                          </p>
-                        </div>
-                        <Badge variant="secondary">{session.message_count} messages</Badge>
+                {sessions.map((session) => (
+                  <div
+                    key={session.session_id}
+                    className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50"
+                  >
+                    <div className="flex-1">
+                      <div className="font-medium">
+                        {session.title || `Conversation ${session.session_id.slice(0, 8)}`}
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        {formatTimestamp(session.created_at)} • {session.message_count} messages
                       </div>
                     </div>
-                  ))
-                )}
+                    <div className="flex space-x-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => loadSession(session.session_id)}
+                      >
+                        Load
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => deleteSession(session.session_id)}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
               </div>
             </ScrollArea>
           </CardContent>
@@ -323,90 +323,77 @@ export default function ConversationalSearch() {
       {/* Messages */}
       <Card className="min-h-[500px]">
         <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <MessageSquare className="h-5 w-5" />
-            <span>Conversation</span>
-            {currentSession && (
-              <Badge variant="outline">
-                Session: {currentSession.session_id.slice(0, 8)}
-              </Badge>
-            )}
-          </CardTitle>
+          <CardTitle className="text-lg">Conversation</CardTitle>
         </CardHeader>
         <CardContent>
           <ScrollArea className="h-96">
             <div className="space-y-4">
-              {messages.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  <MessageSquare className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+              {messages.length === 0 && !isLoading && (
+                <div className="text-center text-gray-500 py-8">
+                  <MessageCircle className="h-12 w-12 mx-auto mb-4 text-gray-300" />
                   <p>Start a conversation by asking a question</p>
-                  <p className="text-sm mt-2">Try: "What is the connection between reading and writing?"</p>
                 </div>
-              ) : (
-                messages.map((message) => (
-                  <div key={message.id} className="space-y-3">
-                    {/* User Message */}
+              )}
+              
+              {messages.map((message) => (
+                <div key={message.id} className="space-y-2">
+                  {message.query && (
                     <div className="flex justify-end">
                       <div className="bg-blue-600 text-white rounded-lg p-3 max-w-[80%]">
-                        <p>{message.userMessage}</p>
+                        <p>{message.query}</p>
                       </div>
                     </div>
-
-                    {/* AI Response */}
-                    {message.aiResponse && (
-                      <div className="flex justify-start">
-                        <div className="bg-gray-100 rounded-lg p-3 max-w-[80%] space-y-3">
-                          <div className="flex items-center space-x-2">
-                            <Sparkles className="h-4 w-4 text-green-600" />
-                            <Badge variant="outline" className="text-xs">
-                              Confidence: {(message.confidence * 100).toFixed(0)}%
-                            </Badge>
-                          </div>
-                          <p className="whitespace-pre-wrap">{message.aiResponse}</p>
-                          
-                          {/* Sources */}
-                          {message.sources && message.sources.length > 0 && (
-                            <div className="mt-3 pt-3 border-t">
-                              <p className="text-sm font-medium text-gray-700 mb-2">Sources:</p>
-                              <div className="space-y-2">
-                                {message.sources.map((source, index) => (
-                                  <div key={index} className="text-sm bg-white p-2 rounded border">
-                                    <p className="font-medium">{source.title}</p>
-                                    <p className="text-gray-600 text-xs">
-                                      Relevance: {(source.relevance * 100).toFixed(0)}%
-                                    </p>
-                                    {source.url && (
-                                      <a
-                                        href={source.url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-blue-600 text-xs hover:underline"
-                                      >
-                                        View source
-                                      </a>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
+                  )}
+                  
+                  {message.response && (
+                    <div className="flex justify-start">
+                      <div className="bg-gray-100 rounded-lg p-3 max-w-[80%]">
+                        <p className="whitespace-pre-wrap">{message.response}</p>
+                        
+                        {message.sources && message.sources.length > 0 && (
+                          <div className="mt-3 pt-3 border-t">
+                            <p className="text-sm font-medium text-gray-700 mb-2">Sources:</p>
+                            <div className="space-y-1">
+                              {message.sources.map((source) => (
+                                <div key={source.id} className="text-sm text-blue-600">
+                                  {source.title}
+                                  {source.url && (
+                                    <a href={source.url} target="_blank" rel="noopener noreferrer" className="ml-2 underline">
+                                      View
+                                    </a>
+                                  )}
+                                </div>
+                              ))}
                             </div>
-                          )}
-                        </div>
+                          </div>
+                        )}
+                        
+                        {message.confidence && (
+                          <div className="mt-2 text-xs text-gray-500">
+                            Confidence: {Math.round(message.confidence * 100)}%
+                          </div>
+                        )}
                       </div>
-                    )}
-
-                    {/* Loading indicator */}
-                    {!message.aiResponse && isLoading && (
-                      <div className="flex justify-start">
-                        <div className="bg-gray-100 rounded-lg p-3 flex items-center space-x-2">
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          <span className="text-sm text-gray-600">Thinking...</span>
-                        </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+              
+              {isLoading && (
+                <div className="flex justify-start">
+                  <div className="bg-gray-100 rounded-lg p-3 max-w-[80%]">
+                    <div className="flex items-center space-x-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Thinking...</span>
+                    </div>
+                    {progress > 0 && (
+                      <div className="mt-2">
+                        <Progress value={progress} className="h-2" />
                       </div>
                     )}
                   </div>
-                ))
+                </div>
               )}
-              <div ref={messagesEndRef} />
             </div>
           </ScrollArea>
         </CardContent>
@@ -414,12 +401,12 @@ export default function ConversationalSearch() {
 
       {/* Input */}
       <Card>
-        <CardContent className="p-4">
+        <CardContent className="pt-6">
           <div className="flex space-x-2">
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              onKeyPress={handleKeyPress}
+              onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
               placeholder="Ask a question about your documents..."
               disabled={isLoading}
               className="flex-1"
@@ -429,11 +416,7 @@ export default function ConversationalSearch() {
               disabled={!query.trim() || isLoading}
               className="flex items-center space-x-2"
             >
-              {isLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
+              <Send className="h-4 w-4" />
               <span>Send</span>
             </Button>
           </div>
@@ -441,4 +424,6 @@ export default function ConversationalSearch() {
       </Card>
     </div>
   );
-}
+};
+
+export default ConversationalSearch;
