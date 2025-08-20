@@ -25,13 +25,17 @@ COPY backend/requirements.txt ./backend/
 RUN pip install --no-cache-dir -r backend/requirements.txt
 
 # Install Node.js dependencies (including dev dependencies for build)
-RUN cd frontend && npm ci
+WORKDIR /app/frontend
+RUN npm ci
 
 # Copy application code
+WORKDIR /app
 COPY . .
 
 # Build frontend
-RUN cd frontend && npm run build
+WORKDIR /app/frontend
+RUN npm run build
+WORKDIR /app
 
 # Create non-root user
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
