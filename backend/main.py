@@ -12,7 +12,7 @@ import os
 from pathlib import Path
 
 # Import routers
-# from api.v1 import ingest, search, documents, conversation
+from api.v1 import ingest, search, documents, conversation
 from core.config import get_settings
 
 # Get settings
@@ -95,10 +95,10 @@ async def catch_all(full_path: str):
     raise HTTPException(status_code=404, detail="Not found")
 
 # Include API routers
-# app.include_router(ingest.router, prefix="/api/v1")
-# app.include_router(search.router, prefix="/api/v1")
-# app.include_router(documents.router, prefix="/api/v1")
-# app.include_router(conversation.router, prefix="/api/v1")
+app.include_router(ingest.router, prefix="/api/v1")
+app.include_router(search.router, prefix="/api/v1")
+app.include_router(documents.router, prefix="/api/v1")
+app.include_router(conversation.router, prefix="/api/v1")
 
 if __name__ == "__main__":
     import uvicorn
@@ -107,5 +107,4 @@ if __name__ == "__main__":
         host=settings.api_host,
         port=settings.api_port,
         reload=settings.debug,
-        workers=settings.workers
     )
