@@ -1,227 +1,150 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Progress } from '@/components/ui/progress';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { MessageCircle, Send, History, Sparkles, Loader2, X, RefreshCw } from 'lucide-react';
+import { 
+  Send, 
+  Bot, 
+  User, 
+  Loader2, 
+  RefreshCw, 
+  MessageSquare,
+  Search,
+  FileText,
+  ExternalLink
+} from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
 
-interface ConversationMessage {
+interface Message {
   id: string;
-  query: string;
-  response: string;
-  timestamp: string;
-  sources?: Array<{
-    id: string;
-    title: string;
-    url?: string;
-  }>;
-  confidence?: number;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: Date;
+  sources?: Source[];
 }
 
-interface ConversationSession {
-  session_id: string;
-  user_id: string;
-  created_at: string;
-  last_activity: string;
-  title?: string;
-  message_count: number;
+interface Source {
+  id: string;
+  title: string;
+  url?: string;
+  content: string;
+  similarity: number;
 }
 
-interface ConversationalResponse {
-  response: string;
-  conversation_id: string;
-  sources: Array<{
-    id: string;
-    title: string;
-    url?: string;
-  }>;
-  confidence: number;
-  suggestions: string[];
-  response_type: string;
-  metadata: any;
-  query_analysis: any;
+interface ConversationState {
+  messages: Message[];
+  isLoading: boolean;
+  sessionId?: string;
 }
 
 const ConversationalSearch: React.FC = () => {
-  const [query, setQuery] = useState('');
-  const [messages, setMessages] = useState<ConversationMessage[]>([]);
-  const [currentSession, setCurrentSession] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [sessions, setSessions] = useState<ConversationSession[]>([]);
-  const [showSessions, setShowSessions] = useState(false);
-  const [responseType, setResponseType] = useState('comprehensive');
-  const [progress, setProgress] = useState(0);
+  const { session } = useAuth();
+  const [conversation, setConversation] = useState<ConversationState>({
+    messages: [],
+    isLoading: false
+  });
+  const [inputMessage, setInputMessage] = useState('');
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
 
   useEffect(() => {
-    loadSessions();
-  }, []);
-
-  const loadSessions = async () => {
-    try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/conversation/sessions`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('supabase.auth.token')}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setSessions(data.sessions || []);
-      }
-    } catch (error) {
-      console.error('Failed to load sessions:', error);
-    }
-  };
-
-  const startNewConversation = async () => {
-    try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/conversation/start`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('supabase.auth.token')}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setCurrentSession(data.conversation_id);
-        setMessages([]);
-        await loadSessions();
-      }
-    } catch (error) {
-      console.error('Failed to start conversation:', error);
-    }
-  };
+    scrollToBottom();
+  }, [conversation.messages]);
 
   const sendMessage = async () => {
-    if (!query.trim() || isLoading) return;
+    if (!inputMessage.trim() || conversation.isLoading) return;
 
-    const userMessage: ConversationMessage = {
+    const userMessage: Message = {
       id: Date.now().toString(),
-      query: query,
-      response: '',
-      timestamp: new Date().toISOString(),
+      role: 'user',
+      content: inputMessage.trim(),
+      timestamp: new Date()
     };
 
-    setMessages(prev => [...prev, userMessage]);
-    setQuery('');
-    setIsLoading(true);
-    setProgress(0);
+    setConversation(prev => ({
+      ...prev,
+      messages: [...prev.messages, userMessage],
+      isLoading: true
+    }));
 
-    // Simulate progress
-    const progressInterval = setInterval(() => {
-      setProgress(prev => Math.min(prev + 10, 90));
-    }, 200);
+    setInputMessage('');
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/conversation/query`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/search/conversational/chat`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('supabase.auth.token')}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          query: userMessage.query,
-          conversation_id: currentSession,
-          response_type: responseType,
-          include_sources: true,
-          max_sources: 5,
+          message: userMessage.content,
+          session_id: conversation.sessionId,
+          conversation_history: conversation.messages.map(msg => ({
+            role: msg.role,
+            content: msg.content
+          }))
         }),
       });
 
-      clearInterval(progressInterval);
-      setProgress(100);
-
       if (response.ok) {
-        const data: ConversationalResponse = await response.json();
+        const data = await response.json();
         
-        const aiMessage: ConversationMessage = {
+        const assistantMessage: Message = {
           id: (Date.now() + 1).toString(),
-          query: '',
-          response: data.response,
-          timestamp: new Date().toISOString(),
-          sources: data.sources,
-          confidence: data.confidence,
+          role: 'assistant',
+          content: data.response,
+          timestamp: new Date(),
+          sources: data.sources || []
         };
 
-        setMessages(prev => prev.map(msg => 
-          msg.id === userMessage.id ? { ...msg, response: data.response } : msg
-        ).concat(aiMessage));
-
-        if (!currentSession) {
-          setCurrentSession(data.conversation_id);
-        }
+        setConversation(prev => ({
+          ...prev,
+          messages: [...prev.messages, assistantMessage],
+          isLoading: false,
+          sessionId: data.session_id || prev.sessionId
+        }));
       } else {
         throw new Error('Failed to get response');
       }
     } catch (error) {
-      console.error('Failed to send message:', error);
-      setMessages(prev => prev.map(msg => 
-        msg.id === userMessage.id ? { ...msg, response: 'Sorry, I encountered an error. Please try again.' } : msg
-      ));
-    } finally {
-      setIsLoading(false);
-      setProgress(0);
+      console.error('Chat error:', error);
+      
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: 'Sorry, I encountered an error while processing your request. Please try again.',
+        timestamp: new Date()
+      };
+
+      setConversation(prev => ({
+        ...prev,
+        messages: [...prev.messages, errorMessage],
+        isLoading: false
+      }));
     }
   };
 
-  const loadSession = async (sessionId: string) => {
-    try {
-      const sessionResponse = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/conversation/sessions/${sessionId}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('supabase.auth.token')}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      
-      const messagesResponse = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/conversation/sessions/${sessionId}/messages`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('supabase.auth.token')}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      
-      if (sessionResponse.ok && messagesResponse.ok) {
-        const sessionData = await sessionResponse.json();
-        const messagesData = await messagesResponse.json();
-        
-        setCurrentSession(sessionId);
-        setMessages(messagesData.messages || []);
-      }
-    } catch (error) {
-      console.error('Failed to load session:', error);
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
     }
   };
 
-  const deleteSession = async (sessionId: string) => {
-    try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/conversation/sessions/${sessionId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('supabase.auth.token')}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      
-      if (response.ok) {
-        await loadSessions();
-        if (currentSession === sessionId) {
-          setCurrentSession(null);
-          setMessages([]);
-        }
-      }
-    } catch (error) {
-      console.error('Failed to delete session:', error);
-    }
+  const startNewConversation = () => {
+    setConversation({
+      messages: [],
+      isLoading: false
+    });
   };
 
-  const formatTimestamp = (timestamp: string) => {
-    return new Date(timestamp).toLocaleString();
+  const formatTimestamp = (timestamp: Date) => {
+    return timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
   return (
@@ -229,196 +152,144 @@ const ConversationalSearch: React.FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
-          <MessageCircle className="h-8 w-8 text-blue-600" />
+          <MessageSquare className="h-8 w-8 text-blue-600" />
           <div>
             <h1 className="text-2xl font-bold">Conversational Search</h1>
-            <p className="text-gray-600">Ask questions and get AI-powered responses from your documents</p>
+            <p className="text-gray-600">Chat with your documents using AI</p>
           </div>
         </div>
-        <div className="flex space-x-2">
-          <Button
-            variant="outline"
-            onClick={() => setShowSessions(!showSessions)}
-            className="flex items-center space-x-2"
-          >
-            <History className="h-4 w-4" />
-            <span>Sessions</span>
-          </Button>
-          <Button
-            onClick={startNewConversation}
-            className="flex items-center space-x-2"
-          >
-            <Sparkles className="h-4 w-4" />
-            <span>New Chat</span>
-          </Button>
-        </div>
+        <Button
+          variant="outline"
+          onClick={startNewConversation}
+          className="flex items-center space-x-2"
+        >
+          <RefreshCw className="h-4 w-4" />
+          <span>New Chat</span>
+        </Button>
       </div>
 
-      {/* Response Type Selector */}
-      <Card>
+      {/* Chat Interface */}
+      <Card className="h-[600px] flex flex-col">
         <CardHeader>
-          <CardTitle className="text-lg">Response Type</CardTitle>
+          <CardTitle className="flex items-center space-x-2">
+            <Bot className="h-5 w-5" />
+            <span>AI Assistant</span>
+          </CardTitle>
         </CardHeader>
-        <CardContent>
-          <Select value={responseType} onValueChange={setResponseType}>
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select response type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="comprehensive">Comprehensive</SelectItem>
-              <SelectItem value="concise">Concise</SelectItem>
-              <SelectItem value="detailed">Detailed</SelectItem>
-              <SelectItem value="summary">Summary</SelectItem>
-            </SelectContent>
-          </Select>
-        </CardContent>
-      </Card>
-
-      {/* Sessions Panel */}
-      {showSessions && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Previous Conversations</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ScrollArea className="h-64">
-              <div className="space-y-2">
-                {sessions.map((session) => (
+        <CardContent className="flex-1 flex flex-col p-0">
+          {/* Messages Area */}
+          <ScrollArea className="flex-1 p-6">
+            {conversation.messages.length === 0 ? (
+              <div className="text-center py-12">
+                <Bot className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">Start a conversation</h3>
+                <p className="text-gray-500">
+                  Ask questions about your documents and get AI-powered answers
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {conversation.messages.map((message) => (
                   <div
-                    key={session.session_id}
-                    className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50"
+                    key={message.id}
+                    className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                   >
-                    <div className="flex-1">
-                      <div className="font-medium">
-                        {session.title || `Conversation ${session.session_id.slice(0, 8)}`}
+                    <div
+                      className={`max-w-[80%] rounded-lg p-4 ${
+                        message.role === 'user'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-100 text-gray-900'
+                      }`}
+                    >
+                      <div className="flex items-start space-x-2 mb-2">
+                        {message.role === 'user' ? (
+                          <User className="h-4 w-4 mt-1 flex-shrink-0" />
+                        ) : (
+                          <Bot className="h-4 w-4 mt-1 flex-shrink-0" />
+                        )}
+                        <div className="flex-1">
+                          <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                          
+                          {/* Sources */}
+                          {message.sources && message.sources.length > 0 && (
+                            <div className="mt-4 pt-4 border-t border-gray-200">
+                              <p className="text-xs font-medium mb-2">Sources:</p>
+                              <div className="space-y-2">
+                                {message.sources.map((source) => (
+                                  <div key={source.id} className="text-xs bg-white rounded p-2">
+                                    <div className="flex items-start justify-between">
+                                      <div className="flex-1">
+                                        <p className="font-medium">{source.title}</p>
+                                        <p className="text-gray-600 line-clamp-2">{source.content}</p>
+                                        <Badge variant="outline" className="mt-1">
+                                          {Math.round(source.similarity * 100)}% match
+                                        </Badge>
+                                      </div>
+                                      {source.url && (
+                                        <a
+                                          href={source.url}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="ml-2 text-blue-600 hover:text-blue-700"
+                                        >
+                                          <ExternalLink className="h-3 w-3" />
+                                        </a>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      <div className="text-sm text-gray-500">
-                        {formatTimestamp(session.created_at)} • {session.message_count} messages
+                      <div className="text-xs opacity-70">
+                        {formatTimestamp(message.timestamp)}
                       </div>
-                    </div>
-                    <div className="flex space-x-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => loadSession(session.session_id)}
-                      >
-                        Load
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => deleteSession(session.session_id)}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
                     </div>
                   </div>
                 ))}
-              </div>
-            </ScrollArea>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Messages */}
-      <Card className="min-h-[500px]">
-        <CardHeader>
-          <CardTitle className="text-lg">Conversation</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ScrollArea className="h-96">
-            <div className="space-y-4">
-              {messages.length === 0 && !isLoading && (
-                <div className="text-center text-gray-500 py-8">
-                  <MessageCircle className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                  <p>Start a conversation by asking a question</p>
-                </div>
-              )}
-              
-              {messages.map((message) => (
-                <div key={message.id} className="space-y-2">
-                  {message.query && (
-                    <div className="flex justify-end">
-                      <div className="bg-blue-600 text-white rounded-lg p-3 max-w-[80%]">
-                        <p>{message.query}</p>
+                
+                {/* Loading indicator */}
+                {conversation.isLoading && (
+                  <div className="flex justify-start">
+                    <div className="bg-gray-100 rounded-lg p-4 max-w-[80%]">
+                      <div className="flex items-center space-x-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span className="text-sm text-gray-600">AI is thinking...</span>
                       </div>
                     </div>
-                  )}
-                  
-                  {message.response && (
-                    <div className="flex justify-start">
-                      <div className="bg-gray-100 rounded-lg p-3 max-w-[80%]">
-                        <p className="whitespace-pre-wrap">{message.response}</p>
-                        
-                        {message.sources && message.sources.length > 0 && (
-                          <div className="mt-3 pt-3 border-t">
-                            <p className="text-sm font-medium text-gray-700 mb-2">Sources:</p>
-                            <div className="space-y-1">
-                              {message.sources.map((source) => (
-                                <div key={source.id} className="text-sm text-blue-600">
-                                  {source.title}
-                                  {source.url && (
-                                    <a href={source.url} target="_blank" rel="noopener noreferrer" className="ml-2 underline">
-                                      View
-                                    </a>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                        
-                        {message.confidence && (
-                          <div className="mt-2 text-xs text-gray-500">
-                            Confidence: {Math.round(message.confidence * 100)}%
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))}
-              
-              {isLoading && (
-                <div className="flex justify-start">
-                  <div className="bg-gray-100 rounded-lg p-3 max-w-[80%]">
-                    <div className="flex items-center space-x-2">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      <span>Thinking...</span>
-                    </div>
-                    {progress > 0 && (
-                      <div className="mt-2">
-                        <Progress value={progress} className="h-2" />
-                      </div>
-                    )}
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+                
+                <div ref={messagesEndRef} />
+              </div>
+            )}
           </ScrollArea>
-        </CardContent>
-      </Card>
 
-      {/* Input */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex space-x-2">
-            <Input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
-              placeholder="Ask a question about your documents..."
-              disabled={isLoading}
-              className="flex-1"
-            />
-            <Button
-              onClick={sendMessage}
-              disabled={!query.trim() || isLoading}
-              className="flex items-center space-x-2"
-            >
-              <Send className="h-4 w-4" />
-              <span>Send</span>
-            </Button>
+          {/* Input Area */}
+          <div className="border-t p-4">
+            <div className="flex space-x-2">
+              <Input
+                value={inputMessage}
+                onChange={(e) => setInputMessage(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="Ask a question about your documents..."
+                disabled={conversation.isLoading}
+                className="flex-1"
+              />
+              <Button
+                onClick={sendMessage}
+                disabled={!inputMessage.trim() || conversation.isLoading}
+                className="flex items-center space-x-2"
+              >
+                {conversation.isLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>

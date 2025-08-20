@@ -3,7 +3,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import { Upload, FileText, CheckCircle, XCircle, Loader2, Download } from 'lucide-react';
+import { 
+  Upload, 
+  FileText, 
+  CheckCircle, 
+  XCircle, 
+  AlertCircle,
+  Loader2
+} from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
 
 interface UploadStatus {
   id: string;
@@ -15,13 +23,14 @@ interface UploadStatus {
 }
 
 const PDFUpload: React.FC = () => {
+  const { session } = useAuth();
   const [uploads, setUploads] = useState<UploadStatus[]>([]);
-  const [isDragOver, setIsDragOver] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = (files: FileList | null) => {
     if (!files) return;
-    
+
     Array.from(files).forEach(file => {
       if (file.type === 'application/pdf') {
         uploadFile(file);
@@ -31,14 +40,14 @@ const PDFUpload: React.FC = () => {
 
   const uploadFile = async (file: File) => {
     const uploadId = Date.now().toString();
-    const uploadStatus: UploadStatus = {
+    
+    // Add to uploads list
+    setUploads(prev => [...prev, {
       id: uploadId,
       filename: file.name,
       status: 'uploading',
-      progress: 0,
-    };
-
-    setUploads(prev => [...prev, uploadStatus]);
+      progress: 0
+    }]);
 
     try {
       const formData = new FormData();
@@ -54,100 +63,110 @@ const PDFUpload: React.FC = () => {
 
       if (response.ok) {
         const result = await response.json();
+        
         setUploads(prev => prev.map(upload => 
           upload.id === uploadId 
-            ? { ...upload, status: 'processing', progress: 50, message: 'Processing PDF...' }
+            ? { 
+                ...upload, 
+                status: 'processing', 
+                progress: 50,
+                message: result.message || 'Processing started'
+              }
             : upload
         ));
 
-        // Poll for status
-        pollProcessingStatus(result.job_id, uploadId);
+        // Simulate processing progress
+        const progressInterval = setInterval(() => {
+          setUploads(prev => prev.map(upload => {
+            if (upload.id === uploadId && upload.status === 'processing') {
+              const newProgress = Math.min(upload.progress + 10, 90);
+              return { ...upload, progress: newProgress };
+            }
+            return upload;
+          }));
+        }, 1000);
+
+        // Check processing status
+        const checkStatus = async () => {
+          try {
+            const statusResponse = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/ingest/status/${result.job_id}`, {
+              headers: {
+                'Authorization': `Bearer ${localStorage.getItem('supabase.auth.token')}`,
+              },
+            });
+
+            if (statusResponse.ok) {
+              const statusData = await statusResponse.json();
+              
+              if (statusData.status === 'completed') {
+                clearInterval(progressInterval);
+                setUploads(prev => prev.map(upload => 
+                  upload.id === uploadId 
+                    ? { 
+                        ...upload, 
+                        status: 'completed', 
+                        progress: 100,
+                        message: 'Processing completed successfully'
+                      }
+                    : upload
+                ));
+              } else if (statusData.status === 'failed') {
+                clearInterval(progressInterval);
+                setUploads(prev => prev.map(upload => 
+                  upload.id === uploadId 
+                    ? { 
+                        ...upload, 
+                        status: 'error', 
+                        error: statusData.error || 'Processing failed'
+                      }
+                    : upload
+                ));
+              }
+            }
+          } catch (error) {
+            console.error('Status check failed:', error);
+          }
+        };
+
+        // Check status every 5 seconds
+        const statusInterval = setInterval(checkStatus, 5000);
+        
+        // Stop checking after 2 minutes
+        setTimeout(() => {
+          clearInterval(statusInterval);
+          clearInterval(progressInterval);
+        }, 120000);
+
       } else {
         throw new Error('Upload failed');
       }
     } catch (error) {
+      console.error('Upload error:', error);
       setUploads(prev => prev.map(upload => 
         upload.id === uploadId 
-          ? { ...upload, status: 'error', progress: 0, error: 'Upload failed' }
+          ? { 
+              ...upload, 
+              status: 'error', 
+              error: 'Upload failed'
+            }
           : upload
       ));
     }
   };
 
-  const pollProcessingStatus = async (jobId: string, uploadId: string) => {
-    const maxAttempts = 60; // 5 minutes with 5-second intervals
-    let attempts = 0;
-
-    const poll = async () => {
-      try {
-        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/ingest/${jobId}/status`, {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('supabase.auth.token')}`,
-          },
-        });
-
-        if (response.ok) {
-          const status = await response.json();
-          
-          if (status.status === 'completed') {
-            setUploads(prev => prev.map(upload => 
-              upload.id === uploadId 
-                ? { ...upload, status: 'completed', progress: 100, message: 'Processing completed!' }
-                : upload
-            ));
-            return;
-          } else if (status.status === 'failed') {
-            setUploads(prev => prev.map(upload => 
-              upload.id === uploadId 
-                ? { ...upload, status: 'error', progress: 0, error: status.message || 'Processing failed' }
-                : upload
-            ));
-            return;
-          } else {
-            // Still processing
-            setUploads(prev => prev.map(upload => 
-              upload.id === uploadId 
-                ? { ...upload, progress: Math.min(upload.progress + 10, 90) }
-                : upload
-            ));
-          }
-        }
-
-        attempts++;
-        if (attempts < maxAttempts) {
-          setTimeout(poll, 5000);
-        } else {
-          setUploads(prev => prev.map(upload => 
-            upload.id === uploadId 
-              ? { ...upload, status: 'error', progress: 0, error: 'Processing timeout' }
-              : upload
-          ));
-        }
-      } catch (error) {
-        setUploads(prev => prev.map(upload => 
-          upload.id === uploadId 
-            ? { ...upload, status: 'error', progress: 0, error: 'Status check failed' }
-            : upload
-        ));
-      }
-    };
-
-    setTimeout(poll, 5000);
-  };
-
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
-    setIsDragOver(true);
+    setIsDragging(true);
   };
 
   const handleDragLeave = (e: React.DragEvent) => {
     e.preventDefault();
-    setIsDragOver(false);
+    setIsDragging(false);
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
-    setIsDragOver(false);
+    setIsDragging(false);
     handleFileSelect(e.dataTransfer.files);
   };
 
@@ -155,10 +174,9 @@ const PDFUpload: React.FC = () => {
     setUploads(prev => prev.filter(upload => upload.id !== uploadId));
   };
 
-  const getStatusIcon = (status: UploadStatus['status']) => {
+  const getStatusIcon = (status: string) => {
     switch (status) {
       case 'uploading':
-        return <Loader2 className="h-4 w-4 animate-spin" />;
       case 'processing':
         return <Loader2 className="h-4 w-4 animate-spin" />;
       case 'completed':
@@ -170,18 +188,16 @@ const PDFUpload: React.FC = () => {
     }
   };
 
-  const getStatusColor = (status: UploadStatus['status']) => {
+  const getStatusColor = (status: string) => {
     switch (status) {
-      case 'uploading':
-        return 'bg-blue-100 text-blue-800';
-      case 'processing':
-        return 'bg-yellow-100 text-yellow-800';
       case 'completed':
         return 'bg-green-100 text-green-800';
+      case 'processing':
+        return 'bg-yellow-100 text-yellow-800';
       case 'error':
         return 'bg-red-100 text-red-800';
       default:
-        return 'bg-gray-100 text-gray-800';
+        return 'bg-blue-100 text-blue-800';
     }
   };
 
@@ -192,19 +208,22 @@ const PDFUpload: React.FC = () => {
         <Upload className="h-8 w-8 text-blue-600" />
         <div>
           <h1 className="text-2xl font-bold">PDF Upload</h1>
-          <p className="text-gray-600">Upload and process PDF documents for AI analysis</p>
+          <p className="text-gray-600">Upload and process PDF documents</p>
         </div>
       </div>
 
       {/* Upload Area */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Upload PDF Files</CardTitle>
+          <CardTitle className="flex items-center space-x-2">
+            <FileText className="h-5 w-5" />
+            <span>Upload PDF Files</span>
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div
             className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-              isDragOver 
+              isDragging 
                 ? 'border-blue-500 bg-blue-50' 
                 : 'border-gray-300 hover:border-gray-400'
             }`}
@@ -213,24 +232,24 @@ const PDFUpload: React.FC = () => {
             onDrop={handleDrop}
           >
             <Upload className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-            <p className="text-lg font-medium mb-2">
-              Drag and drop PDF files here, or click to browse
+            <p className="text-lg font-medium text-gray-900 mb-2">
+              Drop PDF files here or click to browse
             </p>
             <p className="text-gray-500 mb-4">
-              Supported: PDF files up to 50MB
+              Supported format: PDF only
             </p>
             <Button
               onClick={() => fileInputRef.current?.click()}
               className="flex items-center space-x-2"
             >
-              <Download className="h-4 w-4" />
+              <Upload className="h-4 w-4" />
               <span>Choose Files</span>
             </Button>
             <input
               ref={fileInputRef}
               type="file"
-              multiple
               accept=".pdf"
+              multiple
               onChange={(e) => handleFileSelect(e.target.files)}
               className="hidden"
             />
@@ -242,37 +261,42 @@ const PDFUpload: React.FC = () => {
       {uploads.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Upload Status</CardTitle>
+            <CardTitle>Upload Status</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               {uploads.map((upload) => (
-                <div key={upload.id} className="flex items-center space-x-4 p-4 border rounded-lg">
-                  <div className="flex-shrink-0">
-                    {getStatusIcon(upload.status)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-sm font-medium truncate">{upload.filename}</p>
+                <div key={upload.id} className="border rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center space-x-3">
+                      {getStatusIcon(upload.status)}
+                      <div>
+                        <p className="font-medium">{upload.filename}</p>
+                        {upload.message && (
+                          <p className="text-sm text-gray-600">{upload.message}</p>
+                        )}
+                        {upload.error && (
+                          <p className="text-sm text-red-600">{upload.error}</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2">
                       <Badge className={getStatusColor(upload.status)}>
                         {upload.status}
                       </Badge>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => removeUpload(upload.id)}
+                      >
+                        <XCircle className="h-4 w-4" />
+                      </Button>
                     </div>
-                    <Progress value={upload.progress} className="h-2 mb-2" />
-                    {upload.message && (
-                      <p className="text-sm text-gray-600">{upload.message}</p>
-                    )}
-                    {upload.error && (
-                      <p className="text-sm text-red-600">{upload.error}</p>
-                    )}
                   </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => removeUpload(upload.id)}
-                  >
-                    <XCircle className="h-4 w-4" />
-                  </Button>
+                  
+                  {(upload.status === 'uploading' || upload.status === 'processing') && (
+                    <Progress value={upload.progress} className="h-2" />
+                  )}
                 </div>
               ))}
             </div>
@@ -283,31 +307,18 @@ const PDFUpload: React.FC = () => {
       {/* Instructions */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">How it works</CardTitle>
+          <CardTitle className="flex items-center space-x-2">
+            <AlertCircle className="h-5 w-5" />
+            <span>Instructions</span>
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid md:grid-cols-3 gap-4">
-            <div className="text-center">
-              <div className="bg-blue-100 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-3">
-                <Upload className="h-6 w-6 text-blue-600" />
-              </div>
-              <h3 className="font-medium mb-2">1. Upload PDF</h3>
-              <p className="text-sm text-gray-600">Drag and drop or select PDF files to upload</p>
-            </div>
-            <div className="text-center">
-              <div className="bg-yellow-100 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-3">
-                <Loader2 className="h-6 w-6 text-yellow-600" />
-              </div>
-              <h3 className="font-medium mb-2">2. AI Processing</h3>
-              <p className="text-sm text-gray-600">Our AI extracts text and analyzes content</p>
-            </div>
-            <div className="text-center">
-              <div className="bg-green-100 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-3">
-                <CheckCircle className="h-6 w-6 text-green-600" />
-              </div>
-              <h3 className="font-medium mb-2">3. Ready to Search</h3>
-              <p className="text-sm text-gray-600">Search and ask questions about your documents</p>
-            </div>
+          <div className="space-y-3 text-sm text-gray-600">
+            <p>• Upload PDF files by dragging and dropping or clicking the upload button</p>
+            <p>• Files will be automatically processed and added to your library</p>
+            <p>• Processing time depends on file size and content complexity</p>
+            <p>• You can track the progress of each upload in real-time</p>
+            <p>• Once processed, documents will be searchable and available for AI chat</p>
           </div>
         </CardContent>
       </Card>

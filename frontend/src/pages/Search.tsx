@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
-import { useAuth } from '../contexts/AuthContext';
-import toast from 'react-hot-toast';
-import { MagnifyingGlassIcon, DocumentTextIcon, TagIcon } from '@heroicons/react/24/outline';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Search as SearchIcon, Filter, ExternalLink, FileText } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
 
 interface SearchResult {
   id: string;
@@ -9,179 +12,228 @@ interface SearchResult {
   chunk_index: number;
   content: string;
   similarity: number;
-  title?: string;
-  source_url?: string;
+  keyword_rank: number;
+  document_title: string;
+  document_url?: string;
+}
+
+interface SearchResponse {
+  results: SearchResult[];
+  total_count: number;
+  query: string;
+  search_type: string;
 }
 
 const Search: React.FC = () => {
-  const { user, session } = useAuth();
+  const { session } = useAuth();
   const [query, setQuery] = useState('');
+  const [searchType, setSearchType] = useState<'keyword' | 'semantic' | 'hybrid'>('keyword');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
-  const [searchType, setSearchType] = useState<'semantic' | 'hybrid'>('semantic');
+  const [totalCount, setTotalCount] = useState(0);
 
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!query.trim()) {
-      toast.error('Please enter a search query');
-      return;
-    }
+  const performSearch = async () => {
+    if (!query.trim()) return;
 
     setLoading(true);
     try {
       const response = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/search/`, {
         method: 'POST',
         headers: {
+          'Authorization': `Bearer ${localStorage.getItem('supabase.auth.token')}`,
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token}`,
         },
         body: JSON.stringify({
-          query: query,
+          query: query.trim(),
           search_type: searchType,
-          limit: 10,
-          similarity_threshold: 0.5, // Lower threshold to get more results
+          limit: 20
         }),
       });
 
-      if (!response.ok) {
-        throw new Error('Search failed');
+      if (response.ok) {
+        const data: SearchResponse = await response.json();
+        setResults(data.results || []);
+        setTotalCount(data.total_count || 0);
+      } else {
+        console.error('Search failed');
+        setResults([]);
+        setTotalCount(0);
       }
-
-      const data = await response.json();
-      setResults(data.results || []);
-      
-      if (data.results?.length === 0) {
-        toast('No results found. Try a different query.', { icon: '🔍' });
-      }
-    } catch (error: any) {
-      toast.error(error.message || 'Search failed');
+    } catch (error) {
+      console.error('Search error:', error);
+      setResults([]);
+      setTotalCount(0);
     } finally {
       setLoading(false);
     }
   };
 
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    performSearch();
+  };
+
   const formatSimilarity = (similarity: number) => {
-    return `${(similarity * 100).toFixed(1)}%`;
+    return Math.round(similarity * 100);
   };
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-6xl mx-auto p-6 space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Search</h1>
-        <p className="text-gray-600">Search through your research library</p>
+      <div className="flex items-center space-x-3">
+        <SearchIcon className="h-8 w-8 text-blue-600" />
+        <div>
+          <h1 className="text-2xl font-bold">Search</h1>
+          <p className="text-gray-600">Search through your processed documents</p>
+        </div>
       </div>
 
       {/* Search Form */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <form onSubmit={handleSearch} className="space-y-4">
-          <div>
-            <label htmlFor="query" className="block text-sm font-medium text-gray-700 mb-2">
-              Search Query
-            </label>
-            <div className="flex space-x-4">
-              <input
-                type="text"
-                id="query"
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <SearchIcon className="h-5 w-5" />
+            <span>Search Documents</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Search Input */}
+            <div className="flex space-x-2">
+              <Input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="What would you like to know?"
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
-              />
-              <button
-                type="submit"
+                placeholder="Enter your search query..."
+                className="flex-1"
                 disabled={loading}
-                className="flex items-center px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
-              >
-                <MagnifyingGlassIcon className="w-5 h-5 mr-2" />
-                {loading ? 'Searching...' : 'Search'}
-              </button>
+              />
+              <Button type="submit" disabled={!query.trim() || loading}>
+                {loading ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                ) : (
+                  <SearchIcon className="h-4 w-4" />
+                )}
+              </Button>
             </div>
-          </div>
 
-          <div className="flex space-x-4">
-            <label className="flex items-center">
-              <input
-                type="radio"
-                value="semantic"
-                checked={searchType === 'semantic'}
-                onChange={(e) => setSearchType(e.target.value as 'semantic' | 'hybrid')}
-                className="mr-2"
-              />
-              <span className="text-sm text-gray-700">Semantic Search</span>
-            </label>
-            <label className="flex items-center">
-              <input
-                type="radio"
-                value="hybrid"
-                checked={searchType === 'hybrid'}
-                onChange={(e) => setSearchType(e.target.value as 'semantic' | 'hybrid')}
-                className="mr-2"
-              />
-              <span className="text-sm text-gray-700">Hybrid Search</span>
-            </label>
-          </div>
-        </form>
-      </div>
+            {/* Search Type Selection */}
+            <div className="flex items-center space-x-4">
+              <span className="text-sm font-medium">Search Type:</span>
+              <div className="flex space-x-2">
+                {(['keyword', 'semantic', 'hybrid'] as const).map((type) => (
+                  <Button
+                    key={type}
+                    type="button"
+                    variant={searchType === type ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setSearchType(type)}
+                    disabled={loading}
+                  >
+                    {type.charAt(0).toUpperCase() + type.slice(1)}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
 
-      {/* Search Results */}
+      {/* Results */}
       {results.length > 0 && (
-        <div className="bg-white rounded-lg shadow">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h2 className="text-lg font-medium text-gray-900">
-              Search Results ({results.length})
-            </h2>
-          </div>
-          <div className="divide-y divide-gray-200">
-            {results.map((result, index) => (
-              <div key={result.id} className="p-6">
-                <div className="flex items-start justify-between mb-2">
-                  <div className="flex items-center space-x-2">
-                    <DocumentTextIcon className="w-5 h-5 text-gray-400" />
-                    <span className="text-sm text-gray-500">
-                      Result {index + 1} • {formatSimilarity(result.similarity)} match
-                    </span>
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between">
+              <span>Search Results</span>
+              <Badge variant="secondary">
+                {totalCount} result{totalCount !== 1 ? 's' : ''}
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {results.map((result, index) => (
+                <div key={result.id} className="border rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                  <div className="flex items-start justify-between mb-2">
+                    <h3 className="font-medium text-lg line-clamp-2">
+                      {result.document_title}
+                    </h3>
+                    <div className="flex items-center space-x-2">
+                      <Badge variant="outline">
+                        {formatSimilarity(result.similarity)}% match
+                      </Badge>
+                      {result.document_url && (
+                        <a
+                          href={result.document_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-700"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </a>
+                      )}
+                    </div>
                   </div>
-                  {result.source_url && (
-                    <a
-                      href={result.source_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm text-blue-600 hover:text-blue-500"
-                    >
-                      View Source
-                    </a>
-                  )}
-                </div>
-                
-                <div className="prose max-w-none">
-                  <p className="text-gray-900 leading-relaxed">
+                  
+                  <p className="text-gray-600 mb-3 line-clamp-3">
                     {result.content}
                   </p>
-                </div>
-
-                {result.title && (
-                  <div className="mt-3 flex items-center space-x-2">
-                    <TagIcon className="w-4 h-4 text-gray-400" />
-                    <span className="text-sm text-gray-600">{result.title}</span>
+                  
+                  <div className="flex items-center justify-between text-sm text-gray-500">
+                    <span>Chunk {result.chunk_index + 1}</span>
+                    <div className="flex items-center space-x-4">
+                      <span>Similarity: {formatSimilarity(result.similarity)}%</span>
+                      <span>Keyword Rank: {formatSimilarity(result.keyword_rank)}%</span>
+                    </div>
                   </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* No Results */}
-      {!loading && results.length === 0 && query && (
-        <div className="bg-white rounded-lg shadow p-6 text-center">
-          <DocumentTextIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No results found</h3>
-          <p className="text-gray-600">
-            Try adjusting your search terms or adding more content to your library.
-          </p>
-        </div>
+      {!loading && query && results.length === 0 && (
+        <Card>
+          <CardContent className="text-center py-12">
+            <SearchIcon className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No results found</h3>
+            <p className="text-gray-500">
+              Try adjusting your search query or search type
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Search Tips */}
+      {!query && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Search Tips</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              <div className="flex items-start space-x-3">
+                <Badge variant="outline">Keyword</Badge>
+                <p className="text-sm text-gray-600">
+                  Traditional text search that matches exact words and phrases
+                </p>
+              </div>
+              <div className="flex items-start space-x-3">
+                <Badge variant="outline">Semantic</Badge>
+                <p className="text-sm text-gray-600">
+                  AI-powered search that understands meaning and context
+                </p>
+              </div>
+              <div className="flex items-start space-x-3">
+                <Badge variant="outline">Hybrid</Badge>
+                <p className="text-sm text-gray-600">
+                  Combines both keyword and semantic search for best results
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       )}
     </div>
   );
