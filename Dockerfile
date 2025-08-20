@@ -24,9 +24,6 @@ COPY backend/requirements.txt ./backend/
 # Install Python dependencies
 RUN pip install --no-cache-dir -r backend/requirements.txt
 
-# Install Playwright browsers
-RUN playwright install --with-deps chromium
-
 # Install Node.js dependencies
 RUN cd frontend && npm ci --only=production
 
