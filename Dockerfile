@@ -56,9 +56,5 @@ USER appuser
 # Expose port
 EXPOSE 8000
 
-# Add health check
-HEALTHCHECK --interval=30s --timeout=30s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:${PORT:-8000}/health || exit 1
-
-# Start command
-CMD ["/app/entrypoint.sh"]
+# Start command - try shell form to see if it helps
+CMD ["/bin/bash", "/app/entrypoint.sh"]
