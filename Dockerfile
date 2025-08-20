@@ -41,20 +41,11 @@ WORKDIR /app/frontend
 RUN npm run build
 WORKDIR /app
 
-# Create non-root user and set permissions
-RUN useradd -m -u 1000 appuser
-
-# Make entrypoint script executable BEFORE changing user
+# Make entrypoint script executable
 RUN chmod +x /app/entrypoint.sh
-
-# Change ownership of all files to appuser
-RUN chown -R appuser:appuser /app
-
-# Switch to non-root user
-USER appuser
 
 # Expose port
 EXPOSE 8000
 
-# Start command - try shell form to see if it helps
-CMD ["/bin/bash", "/app/entrypoint.sh"]
+# Start command - use simplified approach
+CMD ["/app/entrypoint.sh"]
